@@ -1,0 +1,1457 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
+import {
+  Calendar,
+  CheckCircle2,
+  ClipboardList,
+  Copy,
+  CreditCard,
+  Download,
+  Eye,
+  FileSpreadsheet,
+  FileText,
+  Gift,
+  Heart,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  MapPin,
+  MessageCircle,
+  Music,
+  Package,
+  Pause,
+  Play,
+  Plus,
+  QrCode,
+  Save,
+  ScanLine,
+  Send,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  Users,
+  Volume2,
+  XCircle,
+} from 'lucide-react';
+import { bankTypes, defaultInvitation } from './data.js';
+import { loadInvitation, makeId, makeToken, resetInvitation, saveInvitation } from './storage.js';
+
+const imageFallback =
+  'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=900&q=82';
+
+function getRoute() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'admin') return { type: 'admin' };
+  if (parts[0] === 'checkin') return { type: 'checkin', eventSlug: parts[1], token: parts[2] };
+  if (parts[0] === 'invite') return { type: 'invite', slug: parts[1] };
+  if (parts.length >= 2) return { type: 'invite', eventSlug: parts[0], slug: parts[1] };
+  return { type: 'public' };
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function bankMeta(type) {
+  return bankTypes.find((bank) => bank.value === type) || bankTypes[0];
+}
+
+function copyText(text) {
+  navigator.clipboard?.writeText(text);
+}
+
+function eventSlug(invitation) {
+  return slugify(invitation.site?.eventSlug || `${invitation.hero.title} ${invitation.hero.subtitle}`) || 'undangan';
+}
+
+function coupleName(invitation) {
+  return `${invitation.hero.title} ${invitation.hero.subtitle}`.replace(/\s+/g, ' ').replace(/: /g, ' ').trim();
+}
+
+function guestLink(invitation, guest, origin = window.location.origin) {
+  return `${origin}/${eventSlug(invitation)}/${guest.slug}`;
+}
+
+function qrPayload(invitation, guest, origin = window.location.origin) {
+  return `${origin}/checkin/${eventSlug(invitation)}/${guest.qrToken}`;
+}
+
+function extractQrToken(value = '') {
+  const raw = String(value).trim();
+  const checkinMatch = raw.match(/\/checkin\/[^/]+\/([^/?#]+)/);
+  if (checkinMatch) return decodeURIComponent(checkinMatch[1]);
+  const tokenMatch = raw.match(/qr-[a-z0-9-]+/i);
+  return tokenMatch ? tokenMatch[0] : raw;
+}
+
+function whatsappMessage(invitation, guest, origin = window.location.origin) {
+  const template = invitation.site?.whatsappTemplate || defaultInvitation.site.whatsappTemplate;
+  return template
+    .replaceAll('{guestName}', guest.name)
+    .replaceAll('{inviteLink}', guestLink(invitation, guest, origin))
+    .replaceAll('{coupleName}', coupleName(invitation));
+}
+
+function whatsappUrl(invitation, guest, origin = window.location.origin) {
+  return `https://wa.me/?text=${encodeURIComponent(whatsappMessage(invitation, guest, origin))}`;
+}
+
+function guestRows(invitation) {
+  return invitation.guests.map((guest, index) => {
+    const rsvp = invitation.rsvps.find((item) => item.guestSlug === guest.slug);
+    const checkIn = invitation.checkIns.find((item) => item.guestId === guest.id || item.guestSlug === guest.slug);
+    return {
+      no: index + 1,
+      guest,
+      rsvp,
+      checkIn,
+      attendance: rsvp?.attendance || 'Belum RSVP',
+      pax: rsvp?.pax || '-',
+      note: rsvp?.note || '',
+      checkedInAt: checkIn?.checkedInAt || '',
+    };
+  });
+}
+
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportGuestCsv(invitation) {
+  const header = ['No', 'Nama Tamu', 'Slug', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in'];
+  const rows = guestRows(invitation).map((row) => [
+    row.no,
+    row.guest.name,
+    row.guest.slug,
+    row.attendance,
+    row.pax,
+    row.note,
+    row.checkedInAt ? new Date(row.checkedInAt).toLocaleString('id-ID') : 'Belum hadir',
+  ]);
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+    .join('\n');
+  downloadBlob(`buku-tamu-${eventSlug(invitation)}.csv`, `\ufeff${csv}`, 'text/csv;charset=utf-8');
+}
+
+async function exportGuestPdf(invitation) {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+  const autoTable = autoTableModule.default;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFontSize(16);
+  doc.text(`Buku Tamu - ${coupleName(invitation)}`, 14, 16);
+  autoTable(doc, {
+    startY: 24,
+    head: [['No', 'Nama Tamu', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in']],
+    body: guestRows(invitation).map((row) => [
+      row.no,
+      row.guest.name,
+      row.attendance,
+      row.pax,
+      row.note,
+      row.checkedInAt ? new Date(row.checkedInAt).toLocaleString('id-ID') : 'Belum hadir',
+    ]),
+    styles: { fontSize: 9, cellPadding: 2 },
+    headStyles: { fillColor: [217, 32, 40] },
+  });
+  doc.save(`buku-tamu-${eventSlug(invitation)}.pdf`);
+}
+
+export default function App() {
+  const [route] = useState(getRoute);
+  const [invitation, setInvitation] = useState(loadInvitation);
+
+  const persist = (next) => {
+    setInvitation(next);
+    saveInvitation(next);
+  };
+
+  if (route.type === 'admin') {
+    return <AdminApp invitation={invitation} onSave={persist} />;
+  }
+
+  if (route.type === 'checkin') {
+    return <CheckInLanding invitation={invitation} token={route.token} />;
+  }
+
+  return (
+    <InvitationApp
+      invitation={invitation}
+      onSave={persist}
+      recipientSlug={route.type === 'invite' ? route.slug : undefined}
+    />
+  );
+}
+
+function CheckInLanding({ invitation, token }) {
+  const guest = invitation.guests.find((item) => item.qrToken === token);
+  return (
+    <main className="checkin-landing">
+      <div className="checkin-card">
+        <ShieldCheck size={34} />
+        <div className="mini-logo">{invitation.brand}</div>
+        <h1>QR Check-in</h1>
+        <p>
+          QR ini terdaftar untuk {guest?.name || 'tamu undangan'}, dan validasinya dilakukan melalui scanner admin.
+        </p>
+        <a className="red-wide" href="/">
+          Buka Undangan
+        </a>
+      </div>
+    </main>
+  );
+}
+
+function InvitationApp({ invitation, onSave, recipientSlug }) {
+  const [loading, setLoading] = useState(true);
+  const [opened, setOpened] = useState(false);
+  const [audioOn, setAudioOn] = useState(false);
+  const [copied, setCopied] = useState('');
+  const audioRef = useRef(null);
+  const heroRef = useRef(null);
+  const guest = useMemo(() => {
+    if (!recipientSlug) return null;
+    return invitation.guests.find((item) => item.slug === recipientSlug) || null;
+  }, [invitation.guests, recipientSlug]);
+  const guestName = guest?.name || invitation.cover.guestFallback;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoading(false), 950);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const openInvitation = () => {
+    setOpened(true);
+    window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 620);
+    if (invitation.music.enabled && audioRef.current) {
+      audioRef.current.volume = 0.55;
+      audioRef.current
+        .play()
+        .then(() => setAudioOn(true))
+        .catch(() => setAudioOn(false));
+    }
+  };
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (audioRef.current.paused) {
+      audioRef.current.play().then(() => setAudioOn(true));
+    } else {
+      audioRef.current.pause();
+      setAudioOn(false);
+    }
+  };
+
+  const saveRsvp = (payload) => {
+    const existing = invitation.rsvps.find((rsvp) => rsvp.guestSlug === payload.guestSlug);
+    const nextRsvps = existing
+      ? invitation.rsvps.map((rsvp) => (rsvp.guestSlug === payload.guestSlug ? { ...rsvp, ...payload } : rsvp))
+      : [{ id: makeId('rsvp'), createdAt: new Date().toISOString(), ...payload }, ...invitation.rsvps];
+    onSave({ ...invitation, rsvps: nextRsvps });
+  };
+
+  const deleteRsvp = (guestSlug) => {
+    onSave({ ...invitation, rsvps: invitation.rsvps.filter((rsvp) => rsvp.guestSlug !== guestSlug) });
+  };
+
+  const flashCopy = (key, text) => {
+    copyText(text);
+    setCopied(key);
+    window.setTimeout(() => setCopied(''), 1200);
+  };
+
+  return (
+    <main className="invite-page">
+      {loading && <Preloader />}
+      <audio ref={audioRef} loop src={invitation.music.src} />
+      <CoverLayer invitation={invitation} guestName={guestName} opened={opened} onOpen={openInvitation} />
+      <div className="invitation-shell" aria-hidden={!opened}>
+        <HeroSection invitation={invitation} heroRef={heroRef} />
+        <FilmSection invitation={invitation} />
+        <NewsSection invitation={invitation} />
+        <CoupleSection invitation={invitation} />
+        <EventsSection invitation={invitation} onConfirm={() => document.getElementById('rsvp')?.scrollIntoView({ behavior: 'smooth' })} />
+        <StorySection invitation={invitation} />
+        <GallerySection invitation={invitation} />
+        <GiftSection invitation={invitation} copied={copied} onCopy={flashCopy} />
+        <RsvpSection invitation={invitation} guest={guest} guestName={guestName} onSave={saveRsvp} onDelete={deleteRsvp} />
+        <ClosingSection invitation={invitation} />
+      </div>
+      {opened && (
+        <button className="music-fab" type="button" onClick={toggleAudio} aria-label={audioOn ? 'Pause music' : 'Play music'}>
+          {audioOn ? <Volume2 size={24} /> : <Music size={24} />}
+        </button>
+      )}
+    </main>
+  );
+}
+
+function Preloader() {
+  return (
+    <div className="preloader" role="status" aria-label="Loading invitation">
+      <span className="loader-square" />
+    </div>
+  );
+}
+
+function CoverLayer({ invitation, guestName, opened, onOpen }) {
+  return (
+    <section className={`cover-layer ${opened ? 'cover-opened' : ''}`}>
+      <div className="cover-stack">
+        <div className="netflix-logo">{invitation.brand}</div>
+        <p>{invitation.cover.prompt}</p>
+        <div className="profile-face" aria-hidden="true">
+          <span />
+          <span />
+          <i />
+        </div>
+        <strong>{guestName}</strong>
+        <button className="outline-cta" type="button" onClick={onOpen}>
+          {invitation.cover.buttonLabel}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function HeroSection({ invitation, heroRef }) {
+  return (
+    <section ref={heroRef} className="hero-section" style={{ '--hero-image': `url("${invitation.hero.heroImage || imageFallback}")` }}>
+      <div className="hero-vignette" />
+      <div className="hero-copy reveal-up">
+        <div className="mini-logo">{invitation.brand}</div>
+        <h1>
+          {invitation.hero.title}
+          <span>{invitation.hero.subtitle}</span>
+        </h1>
+        <div className="meta-line">
+          <span className="red-pill">{invitation.hero.status}</span>
+          <span>{invitation.hero.dateLabel}</span>
+        </div>
+        <div className="tag-row">
+          {invitation.hero.tags.map((tag) => (
+            <span key={tag}>{tag}</span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FilmSection({ invitation }) {
+  return (
+    <section className="content-section film-section">
+      <div className="poster-frame">
+        <img src={invitation.hero.trailerImage || imageFallback} alt="" />
+        <button type="button" className="play-badge" aria-label="Play teaser">
+          <Play size={20} fill="currentColor" />
+        </button>
+      </div>
+      <div className="genre-row">
+        <span className="netflix-n">N</span>
+        <span>{invitation.film.genre}</span>
+      </div>
+      <h2>{invitation.film.title}</h2>
+      <div className="film-meta">
+        <span className="match">{invitation.film.match}</span>
+        <span className="rating">{invitation.film.rating}</span>
+        <span>{invitation.film.release}</span>
+        {invitation.film.quality.map((item) => (
+          <span className="quality" key={item}>
+            {item}
+          </span>
+        ))}
+      </div>
+      <button className="red-wide" type="button">
+        {invitation.film.scheduleLabel}
+      </button>
+      <p>{invitation.film.synopsis}</p>
+      <blockquote>
+        {invitation.film.verse}
+        <cite>{invitation.film.verseSource}</cite>
+      </blockquote>
+    </section>
+  );
+}
+
+function NewsSection({ invitation }) {
+  return (
+    <section className="content-section">
+      <h2>{invitation.news.title}</h2>
+      <figure className="news-card">
+        <img src={invitation.news.image || imageFallback} alt="" />
+        <figcaption>
+          {invitation.news.paragraphs.map((text, index) => (
+            <p key={`${text}-${index}`}>{text}</p>
+          ))}
+        </figcaption>
+      </figure>
+    </section>
+  );
+}
+
+function CoupleSection({ invitation }) {
+  return (
+    <section className="content-section">
+      <h2>Bride & Groom</h2>
+      <div className="person-list">
+        {invitation.couple.map((person) => (
+          <article className="person-card" key={person.id}>
+            <img src={person.image || imageFallback} alt="" />
+            <div>
+              <span>{person.role}</span>
+              <h3>{person.name}</h3>
+              <p>{person.detail}</p>
+              {person.instagram && (
+                <a href={person.instagram} target="_blank" rel="noreferrer">
+                  Instagram
+                </a>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EventsSection({ invitation, onConfirm }) {
+  return (
+    <section className="content-section">
+      <h2>Date, Time & Location</h2>
+      <div className="event-list">
+        {invitation.events.map((event) => (
+          <article className="event-card" key={event.id}>
+            <img src={event.image || imageFallback} alt="" />
+            <div className="event-copy">
+              <span className="red-pill">{event.name}</span>
+              <h3>{event.date}</h3>
+              <div className="meta-line">
+                <span className="soft-pill">{event.time}</span>
+                <span className="soft-pill">{event.timezone}</span>
+              </div>
+              <strong>{event.venue}</strong>
+              <p>{event.address}</p>
+              <a href={event.mapsUrl} target="_blank" rel="noreferrer">
+                Buka Google Maps &gt;&gt;
+              </a>
+            </div>
+          </article>
+        ))}
+      </div>
+      <button className="confirm-button" type="button" onClick={onConfirm}>
+        KONFIRMASI KEHADIRAN
+      </button>
+      <Countdown target={invitation.hero.weddingDate} />
+      <a className="save-date" href={calendarUrl(invitation)} target="_blank" rel="noreferrer">
+        <Calendar size={18} />
+        SAVE THE DATE
+      </a>
+    </section>
+  );
+}
+
+function calendarUrl(invitation) {
+  const title = encodeURIComponent(`${invitation.hero.title} ${invitation.hero.subtitle}`.replace(/\s+/g, ' ').trim());
+  const location = encodeURIComponent(invitation.events[0]?.venue || '');
+  return `https://calendar.google.com/calendar/u/0/r/eventedit?text=${title}&location=${location}`;
+}
+
+function Countdown({ target }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const diff = Math.max(0, new Date(target).getTime() - now);
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff / 3600000) % 24);
+  const minutes = Math.floor((diff / 60000) % 60);
+  const seconds = Math.floor((diff / 1000) % 60);
+  const units = [
+    ['Hari', days],
+    ['Jam', hours],
+    ['Menit', minutes],
+    ['Detik', seconds],
+  ];
+  return (
+    <div className="countdown">
+      {units.map(([label, value]) => (
+        <span key={label}>
+          <strong>{String(value).padStart(2, '0')}</strong>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function StorySection({ invitation }) {
+  return (
+    <section className="content-section">
+      <h2>Our Love Story</h2>
+      <div className="story-list">
+        {invitation.stories.map((story) => (
+          <article className="story-card" key={story.id}>
+            <img src={story.image || imageFallback} alt="" />
+            <div>
+              <span>{story.episode}</span>
+              <h3>{story.title}</h3>
+              <p>{story.body}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GallerySection({ invitation }) {
+  return (
+    <section className="content-section">
+      <h2>Our Memories</h2>
+      <div className="memory-grid">
+        {invitation.gallery.map((src, index) => (
+          <img src={src || imageFallback} alt="" key={`${src}-${index}`} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GiftSection({ invitation, copied, onCopy }) {
+  return (
+    <section className="content-section">
+      <h2>Wedding Gift</h2>
+      <p className="section-intro">{invitation.gifts.intro}</p>
+      <div className="bank-list">
+        {invitation.gifts.banks.map((bank) => {
+          const meta = bankMeta(bank.type);
+          return (
+            <article className="bank-card" key={bank.id} style={{ '--bank-color': meta.color }}>
+              <div className="bank-logo">{meta.label}</div>
+              <strong>{bank.accountNumber}</strong>
+              <button type="button" onClick={() => onCopy(bank.id, bank.accountNumber)}>
+                <Copy size={16} />
+                {copied === bank.id ? 'Tersalin' : 'Salin Rekening'}
+              </button>
+              <span>{bank.accountName}</span>
+            </article>
+          );
+        })}
+      </div>
+      <article className="delivery-card">
+        <h3>{invitation.gifts.deliveryTitle}</h3>
+        <p>{invitation.gifts.deliveryNote}</p>
+        <strong>{invitation.gifts.deliveryAddress}</strong>
+        <button type="button" onClick={() => onCopy('address', invitation.gifts.deliveryAddress)}>
+          <Copy size={16} />
+          {copied === 'address' ? 'Tersalin' : 'Salin Alamat'}
+        </button>
+      </article>
+    </section>
+  );
+}
+
+function RsvpSection({ invitation, guest, guestName, onSave, onDelete }) {
+  const guestSlug = guest?.slug || slugify(guestName || 'tamu-undangan') || 'tamu-undangan';
+  const existing = invitation.rsvps.find((rsvp) => rsvp.guestSlug === guestSlug);
+  const [form, setForm] = useState(
+    existing || {
+      guestSlug,
+      guestName,
+      attendance: 'Hadir',
+      pax: '1',
+      note: '',
+    },
+  );
+
+  useEffect(() => {
+    setForm(
+      existing || {
+        guestSlug,
+        guestName,
+        attendance: 'Hadir',
+        pax: '1',
+        note: '',
+      },
+    );
+  }, [existing, guestName, guestSlug]);
+
+  const submit = (event) => {
+    event.preventDefault();
+    onSave({ ...form, guestSlug, guestName: form.guestName || guestName, updatedAt: new Date().toISOString() });
+  };
+
+  return (
+    <section className="content-section rsvp-section" id="rsvp">
+      <h2>RSVP</h2>
+      <form className="rsvp-form" onSubmit={submit}>
+        <label>
+          Nama
+          <input value={form.guestName} onChange={(event) => setForm({ ...form, guestName: event.target.value })} />
+        </label>
+        <label>
+          Kehadiran
+          <select value={form.attendance} onChange={(event) => setForm({ ...form, attendance: event.target.value })}>
+            <option>Hadir</option>
+            <option>Tidak Hadir</option>
+            <option>Masih Ragu</option>
+          </select>
+        </label>
+        <label>
+          Jumlah Tamu
+          <input
+            min="1"
+            type="number"
+            value={form.pax}
+            onChange={(event) => setForm({ ...form, pax: event.target.value })}
+          />
+        </label>
+        <label>
+          Ucapan
+          <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
+        </label>
+        <div className="form-actions">
+          <button className="red-wide" type="submit">
+            <Send size={16} />
+            {existing ? 'UPDATE RSVP' : 'KIRIM RSVP'}
+          </button>
+          {existing && (
+            <button className="ghost-button" type="button" onClick={() => onDelete(guestSlug)}>
+              <Trash2 size={16} />
+              HAPUS RSVP
+            </button>
+          )}
+        </div>
+      </form>
+      <div className="rsvp-feed">
+        {invitation.rsvps.slice(0, 5).map((item) => (
+          <article key={item.id || item.guestSlug}>
+            <strong>{item.guestName}</strong>
+            <span>{item.attendance} - {item.pax} tamu</span>
+            {item.note && <p>{item.note}</p>}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ClosingSection({ invitation }) {
+  return (
+    <section className="closing-section">
+      <Heart size={30} fill="currentColor" />
+      <p>{invitation.closing.body}</p>
+      <strong>{invitation.closing.cta}</strong>
+      <h2>{invitation.closing.signature}</h2>
+    </section>
+  );
+}
+
+function AdminApp({ invitation, onSave }) {
+  const [draft, setDraft] = useState(invitation);
+  const [tab, setTab] = useState('content');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => setDraft(invitation), [invitation]);
+
+  const commit = () => {
+    onSave(draft);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1400);
+  };
+
+  const tabs = [
+    ['content', Eye, 'Konten'],
+    ['couple', Heart, 'Pasangan'],
+    ['events', MapPin, 'Acara'],
+    ['story', ImageIcon, 'Story'],
+    ['gifts', CreditCard, 'Gift'],
+    ['guests', Users, 'Link Tamu'],
+    ['guestbook', ClipboardList, 'Buku Tamu'],
+    ['scanner', ScanLine, 'Scan QR'],
+    ['packages', Package, 'Paket'],
+  ];
+
+  return (
+    <main className="admin-page">
+      <aside className="admin-sidebar">
+        <div className="admin-brand">{draft.brand}</div>
+        <nav>
+          {tabs.map(([key, Icon, label]) => (
+            <button className={tab === key ? 'active' : ''} key={key} type="button" onClick={() => setTab(key)}>
+              <Icon size={18} />
+              {label}
+            </button>
+          ))}
+        </nav>
+        <a className="preview-link" href="/">
+          <Eye size={18} />
+          Preview Undangan
+        </a>
+      </aside>
+      <section className="admin-workspace">
+        <header className="admin-header">
+          <div>
+            <h1>Admin Invitation Studio</h1>
+            <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, QR check-in, dan paket fitur.</p>
+          </div>
+          <div className="admin-actions">
+            <button className="ghost-button" type="button" onClick={() => setDraft(resetInvitation())}>
+              Reset
+            </button>
+            <button className="red-wide" type="button" onClick={commit}>
+              <Save size={16} />
+              {saved ? 'TERSIMPAN' : 'SIMPAN SEMUA'}
+            </button>
+          </div>
+        </header>
+
+        {tab === 'content' && <ContentEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'couple' && <ArrayEditor title="Bride & Groom" field="couple" draft={draft} setDraft={setDraft} template={defaultInvitation.couple[0]} />}
+        {tab === 'events' && <ArrayEditor title="Date, Time & Location" field="events" draft={draft} setDraft={setDraft} template={defaultInvitation.events[0]} />}
+        {tab === 'story' && <StoryGalleryEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'gifts' && <GiftEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'guests' && <GuestRsvpEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'guestbook' && <GuestBookEditor draft={draft} />}
+        {tab === 'scanner' && <ScannerEditor draft={draft} setDraft={setDraft} onSave={onSave} />}
+        {tab === 'packages' && <PackageEditor draft={draft} setDraft={setDraft} />}
+      </section>
+    </main>
+  );
+}
+
+function updateNested(setDraft, section, key, value) {
+  setDraft((prev) => ({ ...prev, [section]: { ...prev[section], [key]: value } }));
+}
+
+function TextField({ label, value, onChange, textarea = false, type = 'text' }) {
+  const Input = textarea ? 'textarea' : 'input';
+  return (
+    <label className="field">
+      {label}
+      <Input type={textarea ? undefined : type} value={value || ''} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function ContentEditor({ draft, setDraft }) {
+  const updateTag = (index, value) => {
+    const tags = [...draft.hero.tags];
+    tags[index] = value;
+    updateNested(setDraft, 'hero', 'tags', tags);
+  };
+  const updateNewsParagraph = (index, value) => {
+    const paragraphs = [...draft.news.paragraphs];
+    paragraphs[index] = value;
+    updateNested(setDraft, 'news', 'paragraphs', paragraphs);
+  };
+
+  return (
+    <div className="editor-grid">
+      <section className="editor-panel">
+        <h2>Cover & Hero</h2>
+        <TextField label="Brand" value={draft.brand} onChange={(value) => setDraft({ ...draft, brand: value })} />
+        <TextField label="Slug URL Client" value={draft.site.eventSlug} onChange={(value) => updateNested(setDraft, 'site', 'eventSlug', slugify(value))} />
+        <TextField label="Cover Prompt" value={draft.cover.prompt} onChange={(value) => updateNested(setDraft, 'cover', 'prompt', value)} />
+        <TextField
+          label="Default Nama Tamu"
+          value={draft.cover.guestFallback}
+          onChange={(value) => updateNested(setDraft, 'cover', 'guestFallback', value)}
+        />
+        <TextField
+          label="Tombol Cover"
+          value={draft.cover.buttonLabel}
+          onChange={(value) => updateNested(setDraft, 'cover', 'buttonLabel', value)}
+        />
+        <TextField label="Judul" value={draft.hero.title} onChange={(value) => updateNested(setDraft, 'hero', 'title', value)} />
+        <TextField label="Subjudul" value={draft.hero.subtitle} onChange={(value) => updateNested(setDraft, 'hero', 'subtitle', value)} />
+        <TextField label="Status" value={draft.hero.status} onChange={(value) => updateNested(setDraft, 'hero', 'status', value)} />
+        <TextField label="Label Tanggal" value={draft.hero.dateLabel} onChange={(value) => updateNested(setDraft, 'hero', 'dateLabel', value)} />
+        <TextField label="Tanggal Countdown" type="datetime-local" value={draft.hero.weddingDate} onChange={(value) => updateNested(setDraft, 'hero', 'weddingDate', value)} />
+        <TextField label="Hero Image URL" value={draft.hero.heroImage} onChange={(value) => updateNested(setDraft, 'hero', 'heroImage', value)} />
+        <TextField label="Trailer Image URL" value={draft.hero.trailerImage} onChange={(value) => updateNested(setDraft, 'hero', 'trailerImage', value)} />
+        <div className="chip-editor">
+          {draft.hero.tags.map((tag, index) => (
+            <input key={`${tag}-${index}`} value={tag} onChange={(event) => updateTag(index, event.target.value)} />
+          ))}
+          <button type="button" onClick={() => updateNested(setDraft, 'hero', 'tags', [...draft.hero.tags, '#newtag'])}>
+            <Plus size={16} />
+            Tag
+          </button>
+        </div>
+      </section>
+
+      <section className="editor-panel">
+        <h2>Film Copy & Music</h2>
+        <TextField label="Genre" value={draft.film.genre} onChange={(value) => updateNested(setDraft, 'film', 'genre', value)} />
+        <TextField label="Judul Film" value={draft.film.title} onChange={(value) => updateNested(setDraft, 'film', 'title', value)} />
+        <TextField label="Match" value={draft.film.match} onChange={(value) => updateNested(setDraft, 'film', 'match', value)} />
+        <TextField label="Rating" value={draft.film.rating} onChange={(value) => updateNested(setDraft, 'film', 'rating', value)} />
+        <TextField label="Release" value={draft.film.release} onChange={(value) => updateNested(setDraft, 'film', 'release', value)} />
+        <TextField label="Schedule Button" value={draft.film.scheduleLabel} onChange={(value) => updateNested(setDraft, 'film', 'scheduleLabel', value)} />
+        <TextField label="Synopsis" textarea value={draft.film.synopsis} onChange={(value) => updateNested(setDraft, 'film', 'synopsis', value)} />
+        <TextField label="Verse" textarea value={draft.film.verse} onChange={(value) => updateNested(setDraft, 'film', 'verse', value)} />
+        <TextField label="Verse Source" value={draft.film.verseSource} onChange={(value) => updateNested(setDraft, 'film', 'verseSource', value)} />
+        <label className="switch-row">
+          <input
+            checked={draft.music.enabled}
+            type="checkbox"
+            onChange={(event) => updateNested(setDraft, 'music', 'enabled', event.target.checked)}
+          />
+          Aktifkan musik
+        </label>
+        <TextField label="Judul Musik" value={draft.music.title} onChange={(value) => updateNested(setDraft, 'music', 'title', value)} />
+        <TextField label="Path Musik" value={draft.music.src} onChange={(value) => updateNested(setDraft, 'music', 'src', value)} />
+      </section>
+
+      <section className="editor-panel wide">
+        <h2>Breaking News & Closing</h2>
+        <TextField label="News Title" value={draft.news.title} onChange={(value) => updateNested(setDraft, 'news', 'title', value)} />
+        <TextField label="News Image URL" value={draft.news.image} onChange={(value) => updateNested(setDraft, 'news', 'image', value)} />
+        {draft.news.paragraphs.map((paragraph, index) => (
+          <TextField key={index} label={`News Paragraph ${index + 1}`} textarea value={paragraph} onChange={(value) => updateNewsParagraph(index, value)} />
+        ))}
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={() => updateNested(setDraft, 'news', 'paragraphs', [...draft.news.paragraphs, 'Tulis paragraf baru...'])}
+        >
+          <Plus size={16} />
+          Tambah Paragraf
+        </button>
+        <TextField label="Closing Body" textarea value={draft.closing.body} onChange={(value) => updateNested(setDraft, 'closing', 'body', value)} />
+        <TextField label="Closing CTA" value={draft.closing.cta} onChange={(value) => updateNested(setDraft, 'closing', 'cta', value)} />
+        <TextField label="Signature" value={draft.closing.signature} onChange={(value) => updateNested(setDraft, 'closing', 'signature', value)} />
+        <TextField
+          label="Template WhatsApp Undangan"
+          textarea
+          value={draft.site.whatsappTemplate}
+          onChange={(value) => updateNested(setDraft, 'site', 'whatsappTemplate', value)}
+        />
+        <p className="helper-text">Variabel tersedia: {'{guestName}'}, {'{inviteLink}'}, {'{coupleName}'}.</p>
+      </section>
+    </div>
+  );
+}
+
+function ArrayEditor({ title, field, draft, setDraft, template }) {
+  const items = draft[field];
+  const updateItem = (id, key, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: prev[field].map((item) => (item.id === id ? { ...item, [key]: value } : item)),
+    }));
+  };
+  const addItem = () => {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: [{ ...template, id: makeId(field), name: template.name || 'Item baru' }, ...prev[field]],
+    }));
+  };
+  const deleteItem = (id) => {
+    setDraft((prev) => ({ ...prev, [field]: prev[field].filter((item) => item.id !== id) }));
+  };
+  const editableKeys = Object.keys(template).filter((key) => key !== 'id');
+
+  return (
+    <section className="editor-panel wide">
+      <div className="panel-title-row">
+        <h2>{title}</h2>
+        <button className="red-wide compact" type="button" onClick={addItem}>
+          <Plus size={16} />
+          Tambah
+        </button>
+      </div>
+      <div className="admin-list">
+        {items.map((item) => (
+          <article className="admin-row-card" key={item.id}>
+            {editableKeys.map((key) => (
+              <TextField
+                key={key}
+                label={key}
+                textarea={['detail', 'address', 'body'].includes(key)}
+                value={item[key]}
+                onChange={(value) => updateItem(item.id, key, value)}
+              />
+            ))}
+            <button className="danger-button" type="button" onClick={() => deleteItem(item.id)}>
+              <Trash2 size={16} />
+              Hapus
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StoryGalleryEditor({ draft, setDraft }) {
+  const updateGallery = (index, value) => {
+    const gallery = [...draft.gallery];
+    gallery[index] = value;
+    setDraft((prev) => ({ ...prev, gallery }));
+  };
+  const deleteGallery = (index) => {
+    setDraft((prev) => ({ ...prev, gallery: prev.gallery.filter((_, itemIndex) => itemIndex !== index) }));
+  };
+
+  return (
+    <div className="editor-grid">
+      <ArrayEditor title="Our Love Story" field="stories" draft={draft} setDraft={setDraft} template={defaultInvitation.stories[0]} />
+      <section className="editor-panel">
+        <div className="panel-title-row">
+          <h2>Our Memories</h2>
+          <button className="red-wide compact" type="button" onClick={() => setDraft((prev) => ({ ...prev, gallery: [imageFallback, ...prev.gallery] }))}>
+            <Plus size={16} />
+            Foto
+          </button>
+        </div>
+        <div className="gallery-editor">
+          {draft.gallery.map((src, index) => (
+            <div className="gallery-edit-row" key={`${src}-${index}`}>
+              <img src={src || imageFallback} alt="" />
+              <input value={src} onChange={(event) => updateGallery(index, event.target.value)} />
+              <button type="button" onClick={() => deleteGallery(index)} aria-label="Hapus foto">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function GiftEditor({ draft, setDraft }) {
+  const updateGift = (key, value) => setDraft((prev) => ({ ...prev, gifts: { ...prev.gifts, [key]: value } }));
+  const updateBank = (id, key, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      gifts: {
+        ...prev.gifts,
+        banks: prev.gifts.banks.map((bank) => (bank.id === id ? { ...bank, [key]: value } : bank)),
+      },
+    }));
+  };
+  const addBank = () => {
+    setDraft((prev) => ({
+      ...prev,
+      gifts: {
+        ...prev.gifts,
+        banks: [{ id: makeId('bank'), type: 'BCA', accountNumber: '0000000000', accountName: 'Nama Pemilik' }, ...prev.gifts.banks],
+      },
+    }));
+  };
+  const deleteBank = (id) => {
+    setDraft((prev) => ({
+      ...prev,
+      gifts: { ...prev.gifts, banks: prev.gifts.banks.filter((bank) => bank.id !== id) },
+    }));
+  };
+
+  return (
+    <section className="editor-panel wide">
+      <h2>Wedding Gift</h2>
+      <TextField label="Intro" textarea value={draft.gifts.intro} onChange={(value) => updateGift('intro', value)} />
+      <div className="panel-title-row">
+        <h3>Rekening</h3>
+        <button className="red-wide compact" type="button" onClick={addBank}>
+          <Plus size={16} />
+          Bank
+        </button>
+      </div>
+      <div className="admin-list">
+        {draft.gifts.banks.map((bank) => (
+          <article className="admin-row-card" key={bank.id}>
+            <label className="field">
+              Jenis Kartu/Bank
+              <select value={bank.type} onChange={(event) => updateBank(bank.id, 'type', event.target.value)}>
+                {bankTypes.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <TextField label="Nomor Rekening" value={bank.accountNumber} onChange={(value) => updateBank(bank.id, 'accountNumber', value)} />
+            <TextField label="Nama Pemilik" value={bank.accountName} onChange={(value) => updateBank(bank.id, 'accountName', value)} />
+            <button className="danger-button" type="button" onClick={() => deleteBank(bank.id)}>
+              <Trash2 size={16} />
+              Hapus
+            </button>
+          </article>
+        ))}
+      </div>
+      <TextField label="Judul Kirim Kado" value={draft.gifts.deliveryTitle} onChange={(value) => updateGift('deliveryTitle', value)} />
+      <TextField label="Catatan Kirim Kado" value={draft.gifts.deliveryNote} onChange={(value) => updateGift('deliveryNote', value)} />
+      <TextField label="Alamat Kirim Kado" textarea value={draft.gifts.deliveryAddress} onChange={(value) => updateGift('deliveryAddress', value)} />
+    </section>
+  );
+}
+
+function GuestRsvpEditor({ draft, setDraft }) {
+  const origin = window.location.origin;
+  const [bulkNames, setBulkNames] = useState('');
+  const [copied, setCopied] = useState('');
+
+  const flashCopy = (key, text) => {
+    copyText(text);
+    setCopied(key);
+    window.setTimeout(() => setCopied(''), 1100);
+  };
+
+  const updateGuest = (id, key, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      guests: prev.guests.map((guest) => {
+        if (guest.id !== id) return guest;
+        if (key === 'name') return { ...guest, name: value };
+        return { ...guest, slug: slugify(value) };
+      }),
+    }));
+  };
+
+  const addGuest = () => {
+    const name = 'Nama Tamu Baru';
+    setDraft((prev) => ({
+      ...prev,
+      guests: [createGuest(name, prev.guests), ...prev.guests],
+    }));
+  };
+
+  const bulkCreate = () => {
+    const names = bulkNames
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (names.length === 0) return;
+    setDraft((prev) => {
+      const created = [];
+      let nextGuests = [...prev.guests];
+      for (const name of names) {
+        const guest = createGuest(name, nextGuests);
+        created.push(guest);
+        nextGuests = [guest, ...nextGuests];
+      }
+      return { ...prev, guests: nextGuests };
+    });
+    setBulkNames('');
+  };
+
+  const deleteGuest = (id) => {
+    setDraft((prev) => ({ ...prev, guests: prev.guests.filter((guest) => guest.id !== id) }));
+  };
+
+  const summary = summarizeGuests(draft);
+
+  return (
+    <div className="editor-grid">
+      <section className="editor-panel wide">
+        <div className="metric-grid">
+          <MetricCard label="Total Tamu" value={summary.total} icon={<Users size={18} />} />
+          <MetricCard label="RSVP Hadir" value={summary.attending} icon={<CheckCircle2 size={18} />} />
+          <MetricCard label="Check-in" value={summary.checkedIn} icon={<UserCheck size={18} />} />
+          <MetricCard label="Belum RSVP" value={summary.pending} icon={<XCircle size={18} />} />
+        </div>
+      </section>
+
+      <section className="editor-panel">
+        <div className="panel-title-row">
+          <h2>Bulk Create Link</h2>
+          <button className="red-wide compact" type="button" onClick={bulkCreate}>
+            <Plus size={16} />
+            Buat Link
+          </button>
+        </div>
+        <label className="field">
+          Nama tamu, satu nama per baris
+          <textarea
+            value={bulkNames}
+            onChange={(event) => setBulkNames(event.target.value)}
+            placeholder={'Bapak Andi & Keluarga\nIbu Maria\nKeluarga Besar Siregar'}
+          />
+        </label>
+        <p className="helper-text">
+          Link production mengikuti pola: /{eventSlug(draft)}/nama-tamu. Setelah deploy domain Vercel/custom domain,
+          link otomatis memakai domain production.
+        </p>
+        <button className="ghost-button" type="button" onClick={addGuest}>
+          <Plus size={16} />
+          Tambah Manual
+        </button>
+      </section>
+
+      <section className="editor-panel">
+        <h2>Template WhatsApp</h2>
+        <TextField
+          label="Pesan"
+          textarea
+          value={draft.site.whatsappTemplate}
+          onChange={(value) => updateNested(setDraft, 'site', 'whatsappTemplate', value)}
+        />
+        <p className="helper-text">Gunakan variabel {'{guestName}'}, {'{inviteLink}'}, dan {'{coupleName}'}.</p>
+      </section>
+
+      <section className="editor-panel wide">
+        <div className="panel-title-row">
+          <h2>Daftar Link Tamu</h2>
+          <span className="count-label">{draft.guests.length} link</span>
+        </div>
+        <div className="admin-list">
+          {draft.guests.map((guest) => {
+            const link = `${origin}/invite/${guest.slug}`;
+            const productionLink = guestLink(draft, guest, origin);
+            return (
+              <article className="admin-row-card" key={guest.id}>
+                <div className="guest-admin-card">
+                  <div className="guest-fields">
+                    <TextField label="Nama Tamu" value={guest.name} onChange={(value) => updateGuest(guest.id, 'name', value)} />
+                    <TextField label="Slug Link" value={guest.slug} onChange={(value) => updateGuest(guest.id, 'slug', value)} />
+                    <div className="link-row">
+                      <a href={`/${eventSlug(draft)}/${guest.slug}`}>
+                        <LinkIcon size={16} />
+                        {productionLink}
+                      </a>
+                      <button type="button" onClick={() => flashCopy(`link-${guest.id}`, productionLink)}>
+                        <Copy size={16} />
+                        <span>{copied === `link-${guest.id}` ? 'OK' : ''}</span>
+                      </button>
+                    </div>
+                    <div className="guest-action-row">
+                      <button type="button" className="ghost-button" onClick={() => flashCopy(`wa-${guest.id}`, whatsappMessage(draft, guest, origin))}>
+                        <MessageCircle size={16} />
+                        {copied === `wa-${guest.id}` ? 'Pesan Tersalin' : 'Salin Pesan WA'}
+                      </button>
+                      <a className="ghost-button" href={whatsappUrl(draft, guest, origin)} target="_blank" rel="noreferrer">
+                        <MessageCircle size={16} />
+                        Buka WhatsApp
+                      </a>
+                      <button className="danger-button" type="button" onClick={() => deleteGuest(guest.id)}>
+                        <Trash2 size={16} />
+                        Hapus
+                      </button>
+                    </div>
+                  </div>
+                  <div className="qr-preview-card">
+                    <GuestQrCode invitation={draft} guest={guest} />
+                    <span>QR Check-in</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function createGuest(name, existingGuests) {
+  const baseSlug = slugify(name) || 'tamu';
+  let slug = baseSlug;
+  let counter = 2;
+  while (existingGuests.some((guest) => guest.slug === slug)) {
+    slug = `${baseSlug}-${counter}`;
+    counter += 1;
+  }
+  return {
+    id: makeId('guest'),
+    name,
+    slug,
+    qrToken: makeToken('qr'),
+  };
+}
+
+function MetricCard({ label, value, icon }) {
+  return (
+    <article className="metric-card">
+      {icon}
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function summarizeGuests(invitation) {
+  const rows = guestRows(invitation);
+  return {
+    total: rows.length,
+    attending: rows.filter((row) => row.attendance === 'Hadir').length,
+    pending: rows.filter((row) => row.attendance === 'Belum RSVP').length,
+    checkedIn: rows.filter((row) => Boolean(row.checkedInAt)).length,
+  };
+}
+
+function GuestQrCode({ invitation, guest }) {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(qrPayload(invitation, guest), {
+      margin: 1,
+      width: 132,
+      color: {
+        dark: '#111111',
+        light: '#ffffff',
+      },
+    }).then((dataUrl) => {
+      if (active) setSrc(dataUrl);
+    });
+    return () => {
+      active = false;
+    };
+  }, [guest, invitation]);
+
+  return src ? <img src={src} alt={`QR check-in ${guest.name}`} /> : <div className="qr-skeleton" />;
+}
+
+function GuestBookEditor({ draft }) {
+  const rows = guestRows(draft);
+  const summary = summarizeGuests(draft);
+
+  return (
+    <section className="editor-panel wide">
+      <div className="panel-title-row">
+        <div>
+          <h2>Buku Tamu</h2>
+          <p className="helper-text">Recap RSVP dan check-in untuk admin, siap export Excel-compatible CSV atau PDF.</p>
+        </div>
+        <div className="export-actions">
+          <button className="ghost-button" type="button" onClick={() => exportGuestCsv(draft)}>
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+          <button className="ghost-button" type="button" onClick={() => exportGuestPdf(draft)}>
+            <FileText size={16} />
+            Export PDF
+          </button>
+        </div>
+      </div>
+      <div className="metric-grid">
+        <MetricCard label="Total Tamu" value={summary.total} icon={<Users size={18} />} />
+        <MetricCard label="Hadir RSVP" value={summary.attending} icon={<CheckCircle2 size={18} />} />
+        <MetricCard label="Sudah Check-in" value={summary.checkedIn} icon={<UserCheck size={18} />} />
+        <MetricCard label="Belum RSVP" value={summary.pending} icon={<XCircle size={18} />} />
+      </div>
+      <div className="table-wrap">
+        <table className="guest-table">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Nama</th>
+              <th>RSVP</th>
+              <th>Jumlah</th>
+              <th>Ucapan</th>
+              <th>Check-in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.guest.id}>
+                <td>{row.no}</td>
+                <td>{row.guest.name}</td>
+                <td>
+                  <span className={`status-pill ${row.attendance === 'Hadir' ? 'ok' : row.attendance === 'Tidak Hadir' ? 'no' : ''}`}>
+                    {row.attendance}
+                  </span>
+                </td>
+                <td>{row.pax}</td>
+                <td>{row.note || '-'}</td>
+                <td>{row.checkedInAt ? new Date(row.checkedInAt).toLocaleString('id-ID') : 'Belum hadir'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ScannerEditor({ draft, setDraft, onSave }) {
+  const [scanInput, setScanInput] = useState('');
+  const [result, setResult] = useState(null);
+  const [scannerRunning, setScannerRunning] = useState(false);
+  const scannerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+      }
+    };
+  }, []);
+
+  const recordToken = (rawValue) => {
+    const token = extractQrToken(rawValue);
+    const guest = draft.guests.find((item) => item.qrToken === token);
+    if (!guest) {
+      setResult({ type: 'error', title: 'QR tidak dikenal', body: 'Token tidak cocok dengan daftar tamu di event ini.' });
+      return;
+    }
+    const existing = draft.checkIns.find((item) => item.guestId === guest.id || item.qrToken === guest.qrToken);
+    if (existing) {
+      setResult({
+        type: 'warning',
+        title: 'Sudah check-in',
+        body: `${guest.name} sudah tercatat pada ${new Date(existing.checkedInAt).toLocaleString('id-ID')}.`,
+      });
+      return;
+    }
+    const checkIn = {
+      id: makeId('checkin'),
+      guestId: guest.id,
+      guestSlug: guest.slug,
+      guestName: guest.name,
+      qrToken: guest.qrToken,
+      checkedInAt: new Date().toISOString(),
+      source: 'admin-scanner',
+    };
+    const next = { ...draft, checkIns: [checkIn, ...draft.checkIns] };
+    setDraft(next);
+    onSave(next);
+    setResult({ type: 'success', title: 'Check-in berhasil', body: `${guest.name} berhasil masuk buku tamu.` });
+  };
+
+  const startScanner = async () => {
+    if (scannerRunning) return;
+    setResult(null);
+    const { Html5Qrcode } = await import('html5-qrcode');
+    const scanner = new Html5Qrcode('qr-reader');
+    scannerRef.current = scanner;
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      async (decodedText) => {
+        recordToken(decodedText);
+        await scanner.stop();
+        setScannerRunning(false);
+      },
+    );
+    setScannerRunning(true);
+  };
+
+  const stopScanner = async () => {
+    if (!scannerRef.current) return;
+    await scannerRef.current.stop().catch(() => {});
+    setScannerRunning(false);
+  };
+
+  return (
+    <div className="editor-grid">
+      <section className="editor-panel">
+        <h2>Scan QR Kehadiran</h2>
+        <p className="helper-text">
+          Gunakan kamera panitia/admin untuk scan QR tamu. QR memakai token unik, dan production nanti harus divalidasi
+          ulang oleh API agar tidak bisa dicurangi dari browser biasa.
+        </p>
+        <div id="qr-reader" className="qr-reader" />
+        <div className="guest-action-row">
+          <button className="red-wide compact" type="button" onClick={startScanner}>
+            <ScanLine size={16} />
+            Mulai Scan
+          </button>
+          <button className="ghost-button" type="button" onClick={stopScanner}>
+            <Pause size={16} />
+            Stop
+          </button>
+        </div>
+        <label className="field">
+          Manual Token / URL QR
+          <input value={scanInput} onChange={(event) => setScanInput(event.target.value)} placeholder="Tempel hasil scan QR" />
+        </label>
+        <button className="ghost-button" type="button" onClick={() => recordToken(scanInput)}>
+          <UserCheck size={16} />
+          Check-in Manual
+        </button>
+        {result && (
+          <div className={`scan-result ${result.type}`}>
+            <strong>{result.title}</strong>
+            <span>{result.body}</span>
+          </div>
+        )}
+      </section>
+      <section className="editor-panel">
+        <h2>Riwayat Check-in</h2>
+        <div className="admin-list">
+          {draft.checkIns.length === 0 && <p className="empty-state">Belum ada tamu yang check-in.</p>}
+          {draft.checkIns.map((item) => (
+            <article className="checkin-row" key={item.id}>
+              <UserCheck size={18} />
+              <div>
+                <strong>{item.guestName}</strong>
+                <span>{new Date(item.checkedInAt).toLocaleString('id-ID')}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PackageEditor({ draft, setDraft }) {
+  const updatePackage = (key, value) => {
+    setDraft((prev) => ({ ...prev, packageConfig: { ...prev.packageConfig, [key]: value } }));
+  };
+  const active = draft.packageConfig.tiers.find((tier) => tier.id === draft.packageConfig.activePackage);
+
+  return (
+    <section className="editor-panel wide">
+      <h2>Paket Fitur</h2>
+      <p className="helper-text">
+        Master ini terbuka semua fitur. Saat deploy ke client, paket bisa dikunci dari konfigurasi/backend supaya hanya
+        fitur sesuai paket yang aktif.
+      </p>
+      <div className="package-control">
+        <label className="field">
+          Paket Aktif
+          <select value={draft.packageConfig.activePackage} onChange={(event) => updatePackage('activePackage', event.target.value)}>
+            {draft.packageConfig.tiers.map((tier) => (
+              <option key={tier.id} value={tier.id}>
+                {tier.name} - {tier.guestLimit} tamu
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="switch-row">
+          <input
+            checked={draft.packageConfig.masterUnlock}
+            type="checkbox"
+            onChange={(event) => updatePackage('masterUnlock', event.target.checked)}
+          />
+          Master unlock semua fitur
+        </label>
+      </div>
+      <div className="package-grid">
+        {draft.packageConfig.tiers.map((tier) => (
+          <article className={`package-card ${active?.id === tier.id ? 'active' : ''}`} key={tier.id}>
+            <Package size={22} />
+            <h3>{tier.name}</h3>
+            <strong>{tier.guestLimit} tamu</strong>
+            <ul>
+              {tier.features.map((feature) => (
+                <li key={feature}>
+                  <CheckCircle2 size={15} />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
