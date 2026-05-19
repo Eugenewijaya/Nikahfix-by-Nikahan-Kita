@@ -1,190 +1,397 @@
-# Nikahfix by Nikahan Kita
+# ✨ Nikahfix — Premium Digital Wedding Invitation Platform
 
-A premium digital wedding invitation template inspired by cinematic streaming-product patterns: a Netflix-style cover, immersive invitation page, editable admin studio, bulk guest links, WhatsApp message templates, RSVP, guest-book exports, and QR attendance tracking.
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react" />
+  <img src="https://img.shields.io/badge/Vite-Fast%20Build-purple?style=for-the-badge&logo=vite" />
+  <img src="https://img.shields.io/badge/Vercel-Deployment-black?style=for-the-badge&logo=vercel" />
+  <img src="https://img.shields.io/badge/Neon-Postgres-00e699?style=for-the-badge&logo=postgresql" />
+  <img src="https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge" />
+</p>
 
-This repository is intended as a **master template** for client deployments. All package features are currently unlocked so you can duplicate the project, customize a client event, and later lock features per package from backend configuration.
+<p align="center">
+  <b>Cinematic Digital Wedding Invitation SaaS</b><br/>
+  Netflix-inspired invitation experience with admin studio, RSVP, QR attendance, guest management, and export system.
+</p>
 
-## Highlights
+---
 
-- Netflix-inspired invitation flow: preloader, profile cover, open invitation animation, cinematic hero, film metadata, story sections, gift section, RSVP, and music playback.
-- Admin studio for editing invitation content, couple details, event locations, stories, gallery URLs, bank/gift accounts, guests, and RSVP records.
-- Bulk guest-link creation from plain text names.
-- Production-style guest URLs: `/{event-slug}/{guest-slug}`.
-- WhatsApp invite template with variables: `{guestName}`, `{inviteLink}`, `{coupleName}`.
-- Guest book recap with RSVP and check-in status.
-- Export guest book to Excel-compatible CSV and PDF.
-- QR code per guest for venue check-in.
-- QR scanner screen for admin/panitia check-in flow.
-- Package configuration for 3 offer tiers:
-  - Paket 1: RSVP
-  - Paket 2: RSVP + guest-book export
-  - Paket 3: RSVP + guest-book export + QR scan
+# 🎬 Overview
 
-## Tech Stack
+**Nikahfix by Nikahan Kita** is a premium digital wedding invitation template designed with a modern cinematic experience inspired by streaming-platform UI patterns.
 
-- React 19
-- Vite
-- Lucide React icons
-- `qrcode` for guest QR generation
-- `html5-qrcode` for browser camera scanning
-- `jspdf` and `jspdf-autotable` for PDF export
-- Vercel Functions for shared persistence
-- Neon Postgres for production storage
-- Browser `localStorage` fallback when API/database is not configured
+This project is built as a **master deployment template** for wedding invitation services, enabling rapid customization for multiple clients while maintaining scalable SaaS architecture readiness.
 
-## Local Development
+The system combines elegant frontend presentation with operational tools such as:
+
+- Guest management
+- RSVP handling
+- QR attendance tracking
+- Bulk invitation generation
+- WhatsApp invitation automation
+- Exportable guest books
+- Admin dashboard management
+
+Perfect for:
+- Wedding invitation businesses
+- Creative agencies
+- Event organizers
+- SaaS invitation startups
+
+---
+
+# 🌟 Features
+
+## 🎞 Cinematic Invitation Experience
+
+- Netflix-style landing cover
+- Opening invitation animation
+- Hero cinematic section
+- Music playback support
+- Story timeline section
+- Couple profile showcase
+- Gallery & memories
+- Gift & bank account section
+- Responsive mobile-first design
+
+---
+
+## 🛠 Admin Studio
+
+Full invitation management dashboard including:
+
+- Couple information
+- Event schedules
+- Story editing
+- Gallery URL management
+- Gift account management
+- RSVP monitoring
+- Guest management
+- QR attendance tracking
+
+---
+
+## 👥 Guest Management
+
+- Bulk guest generation from text
+- Dynamic guest URLs
+- Personalized invitations
+- WhatsApp-ready message templates
+- RSVP tracking system
+- Guest attendance recap
+
+Example URL:
+
+```bash
+/{event-slug}/{guest-slug}
+```
+
+Example:
+
+```bash
+/nikahan-kita-evelyn-adrian/john-doe
+```
+
+---
+
+## 📲 WhatsApp Integration
+
+Built-in dynamic invitation template variables:
+
+```text
+{guestName}
+{inviteLink}
+{coupleName}
+```
+
+Example output:
+
+```text
+Dear John Doe,
+
+You are invited to the wedding of Evelyn & Adrian.
+
+Open Invitation:
+https://domain.com/evelyn-adrian/john-doe
+```
+
+---
+
+## 📦 Package Tier System
+
+### Paket 1
+- RSVP Feature
+
+### Paket 2
+- RSVP
+- Guest Book Export
+
+### Paket 3
+- RSVP
+- Guest Book Export
+- QR Check-in System
+
+---
+
+# ⚡ Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| React 19 | Frontend Framework |
+| Vite | Build Tool |
+| Lucide React | Icon System |
+| Vercel Functions | Serverless API |
+| Neon Postgres | Cloud Database |
+| html5-qrcode | QR Scanner |
+| qrcode | QR Generator |
+| jsPDF | PDF Export |
+| jspdf-autotable | PDF Table Export |
+
+---
+
+# 🏗 Architecture
+
+```text
+Frontend (React + Vite)
+        │
+        ▼
+Vercel Functions API
+        │
+        ▼
+Neon PostgreSQL
+```
+
+Fallback mode:
+
+```text
+Browser localStorage
+```
+
+---
+
+# 🚀 Local Development
+
+## Installation
 
 ```bash
 npm install
+```
+
+## Run Development Server
+
+```bash
 npm run dev
 ```
 
-Open:
+---
 
-- Invitation: `http://127.0.0.1:5173/`
-- Admin: `http://127.0.0.1:5173/admin`
-- Example guest URL: `http://127.0.0.1:5173/nikahan-kita-nama-pria-nama-wanita/contoh-nama-tamu`
+# 🌐 Routes
 
-## Build
+| Page | Route |
+|---|---|
+| Invitation | `/` |
+| Admin Dashboard | `/admin` |
+| Guest Invitation | `/{event-slug}/{guest-slug}` |
+| QR Check-in | `/checkin/{event-slug}/{qr-token}` |
+
+Example:
+
+```bash
+http://127.0.0.1:5173/admin
+```
+
+---
+
+# 📦 Production Build
 
 ```bash
 npm run build
 ```
 
-## Vercel Deployment
+---
 
-This project includes `vercel.json` with a rewrite to `index.html` so direct routes keep working on Vercel:
+# ☁️ Vercel Deployment
 
-- `/admin`
-- `/{event-slug}/{guest-slug}`
-- `/checkin/{event-slug}/{qr-token}`
+The project already includes:
 
-Deploy with Vercel after connecting the GitHub repository.
+- SPA Rewrite Configuration
+- Dynamic Route Support
+- Vercel Function Integration
 
-## Environment Configuration
+Supported routes:
 
-Create the following variables when the backend is migrated from `localStorage` to Vercel Functions + Neon Postgres:
+```text
+/admin
+/{event-slug}/{guest-slug}
+/checkin/{event-slug}/{qr-token}
+```
+
+Deploy directly using:
+
+- GitHub Integration
+- Vercel CLI
+- Manual Import
+
+---
+
+# 🔐 Environment Variables
+
+Create `.env`:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=require"
+
 ADMIN_PASSWORD="change-this-before-production"
+
 SESSION_SECRET="replace-with-a-long-random-secret"
+
 VITE_PUBLIC_SITE_URL="https://your-domain.com"
 ```
 
-Important: in the current template, `DATABASE_URL` is documented but not used yet. The UI is fully functional as a frontend template, but production-shared CRUD still needs backend API routes.
+---
 
-## Current Data Layer Status
+# 🧠 Current Backend State
 
-The current implementation includes a lightweight Vercel Functions backend at `api/state.js`.
-
-In production, the frontend attempts to read/write shared state through:
+Current implementation uses:
 
 ```text
 GET /api/state
 PUT /api/state
 ```
 
-The API stores the invitation state as JSON in Neon Postgres table `invitation_state`. This is intentionally simple for the first production version and keeps hosting cost low.
-
-That means:
-
-- Admin CRUD can be shared across devices when `DATABASE_URL` is configured.
-- Guest RSVP can be shared across devices when `DATABASE_URL` is configured.
-- Export and QR check-in flows read from the same state.
-- If the API/database is unavailable, the app falls back to browser `localStorage`.
-
-For a larger multi-client SaaS version, normalize the data layer to:
+Data persistence is stored as JSON inside:
 
 ```text
-Vercel Static Frontend
-        +
-Vercel Functions API
-        +
-Neon Postgres
+invitation_state
 ```
 
-Recommended future normalized tables:
+This lightweight approach minimizes hosting costs while keeping the system fully functional.
 
-- `events`
-- `invitation_settings`
-- `guests`
-- `rsvps`
-- `gift_accounts`
-- `check_ins`
-- `admin_sessions`
+---
 
-Recommended future API routes:
+# 🗄 Recommended Future Database Structure
 
-- `GET /api/invitation`
-- `PUT /api/admin/invitation`
-- `GET /api/admin/guests`
-- `POST /api/admin/guests/bulk`
-- `PUT /api/admin/guests/:id`
-- `DELETE /api/admin/guests/:id`
-- `POST /api/rsvp`
-- `PUT /api/rsvp/:id`
-- `DELETE /api/rsvp/:id`
-- `POST /api/admin/check-in`
-- `GET /api/admin/guest-book`
+```text
+events
+invitation_settings
+guests
+rsvps
+gift_accounts
+check_ins
+admin_sessions
+```
 
-## Neon Postgres Setup
+---
 
-You can connect Neon directly to Vercel without Railway.
+# 🔮 Recommended Future API
 
-1. Create a Neon database.
-2. Copy the pooled connection string.
-3. In Vercel project settings, add:
+```text
+GET /api/invitation
+PUT /api/admin/invitation
+
+GET /api/admin/guests
+POST /api/admin/guests/bulk
+
+POST /api/rsvp
+
+POST /api/admin/check-in
+GET /api/admin/guest-book
+```
+
+---
+
+# 📷 QR Check-in Security
+
+Production recommendations:
+
+- Server-side QR validation
+- Admin authentication
+- Duplicate attendance prevention
+- Session-based scanner access
+- Protected check-in endpoints
+
+---
+
+# 🧩 Neon Database Setup
+
+## Step 1 — Create Database
+
+Create a project on Neon.
+
+---
+
+## Step 2 — Add Environment Variable
 
 ```env
 DATABASE_URL="postgresql://..."
 ```
 
-4. Redeploy the Vercel project.
-5. Open `/admin`, make one save, and the app will create the `invitation_state` table automatically.
+---
 
-Never commit the real `DATABASE_URL` to GitHub.
+## Step 3 — Redeploy
 
-## QR Check-in Security Notes
+Redeploy the Vercel project.
 
-The template generates a unique QR token per guest. For production, the scanner must validate that token on the server before writing attendance.
+---
 
-Minimum production rules:
+## Step 4 — Initialize Database
 
-- QR token must be stored server-side.
-- Check-in endpoint must require admin authentication.
-- Check-in should be one-time or explicitly marked as duplicate.
-- Do not trust frontend-only validation.
-- Do not expose admin scanner without a login/session.
-
-## Making This Repository a Template
-
-After pushing to GitHub, enable template mode:
+Open:
 
 ```bash
-gh repo edit Eugenewijaya/Nikahfix-by-Nikahan-Kita --template
+/admin
 ```
 
-Or enable it from GitHub:
+Save once and the app automatically creates:
 
-`Settings -> General -> Template repository`
+```text
+invitation_state
+```
 
-## Production Readiness Checklist
+---
 
-- [x] Vite production build passes.
-- [x] Dependency audit passes.
-- [x] SPA rewrite is configured for Vercel.
-- [x] Admin template screens are available.
-- [x] Bulk guest links and WhatsApp template UI are available.
-- [x] Guest-book export UI is available.
-- [x] QR check-in template flow is available.
-- [x] Lightweight backend persistence with Neon Postgres JSON state.
-- [ ] Admin authentication.
-- [ ] Server-side QR token validation.
-- [ ] Server-side package gating per client.
-- [ ] Future normalized relational schema for multi-client scale.
-- [ ] Optional Vercel Blob integration for uploaded media assets.
+# 📋 Production Readiness
 
-## License
+| Feature | Status |
+|---|---|
+| Vite Production Build | ✅ |
+| Dependency Audit | ✅ |
+| SPA Rewrite | ✅ |
+| Admin Dashboard | ✅ |
+| RSVP System | ✅ |
+| Guest Export | ✅ |
+| QR Check-in | ✅ |
+| Neon Persistence | ✅ |
+| Admin Authentication | ⏳ |
+| QR Validation | ⏳ |
+| SaaS Package Restriction | ⏳ |
 
-Private commercial template for Nikahan Kita / client deployments.
+---
+
+# 🎨 Vision
+
+Nikahfix is designed not only as a wedding invitation template, but as a scalable digital invitation ecosystem capable of evolving into a full invitation SaaS platform.
+
+Built with:
+- cinematic UX
+- scalable architecture
+- lightweight deployment
+- multi-client readiness
+
+---
+
+# 📄 License
+
+Private Commercial Template  
+For **Nikahan Kita** and client deployment usage only.
+
+---
+
+# 🤝 Credits
+
+Developed with passion for modern digital experiences, elegant storytelling, and scalable SaaS architecture.
+
+---
+
+<p align="center">
+  <b>✨ Nikahfix — Turning Invitations Into Experiences ✨</b>
+</p>
