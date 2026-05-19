@@ -337,8 +337,9 @@ img {
   inset: 0;
   z-index: -1;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.03) 25%, rgba(0, 0, 0, 0.38) 63%, #000 98%),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.5), transparent 36%, rgba(0, 0, 0, 0.2));
+    radial-gradient(circle at 58% 18%, rgba(255, 255, 255, 0.2), transparent 22%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 15%, rgba(0, 0, 0, 0.24) 43%, rgba(0, 0, 0, 0.78) 78%, #000 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.18) 42%, rgba(0, 0, 0, 0.48));
 }
 
 .hero-copy {
@@ -562,6 +563,9 @@ blockquote cite {
   width: 100%;
   height: 212px;
   object-fit: cover;
+  filter: saturate(0.95) contrast(1.05);
+  -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
 }
 
 .news-card figcaption {
@@ -574,7 +578,6 @@ blockquote cite {
 
 .person-list,
 .event-list,
-.story-list,
 .bank-list,
 .rsvp-feed {
   display: grid;
@@ -587,6 +590,9 @@ blockquote cite {
   width: 100%;
   height: 230px;
   object-fit: cover;
+  filter: saturate(0.95) contrast(1.05);
+  -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
 }
 
 .person-card > div,
@@ -610,6 +616,172 @@ blockquote cite {
   margin-bottom: 10px;
   font-size: 21px;
   line-height: 1.2;
+}
+
+.episode-shelf {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.episode-cover {
+  position: relative;
+  min-height: 284px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  isolation: isolate;
+  background: #050505;
+}
+
+.episode-cover img {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.92) contrast(1.08);
+  transform: scale(1.02);
+  transition: transform 0.35s ease;
+}
+
+.episode-cover:hover img {
+  transform: scale(1.07);
+}
+
+.episode-gradient {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 20%, rgba(0, 0, 0, 0.48) 58%, #000 100%),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.42), transparent 52%);
+}
+
+.episode-cover-copy {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 14px;
+}
+
+.episode-label {
+  display: inline-flex;
+  margin-bottom: 7px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.episode-cover h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+  line-height: 1.12;
+}
+
+.episode-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.episode-meta span {
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.episode-cover button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #fff;
+  background: rgba(217, 32, 40, 0.94);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.story-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  padding: 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.story-modal-card {
+  position: relative;
+  width: min(100%, 380px);
+  max-height: min(760px, calc(100svh - 36px));
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: #0b0b0b;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.72);
+}
+
+.story-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
+.story-modal-poster {
+  position: relative;
+  height: 310px;
+  overflow: hidden;
+}
+
+.story-modal-poster::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 48%, #0b0b0b 100%);
+}
+
+.story-modal-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-modal-copy {
+  margin-top: -42px;
+  padding: 0 18px 22px;
+  position: relative;
+}
+
+.story-modal-copy h3 {
+  margin: 5px 0 10px;
+  font-size: 26px;
+  line-height: 1.08;
+}
+
+.story-modal-copy p {
+  color: var(--muted);
+  line-height: 1.65;
 }
 
 .person-card a,
@@ -1377,6 +1549,14 @@ blockquote cite {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .episode-shelf {
+    grid-template-columns: 1fr;
+  }
+
+  .episode-cover {
+    min-height: 340px;
+  }
+
   .guest-admin-card,
   .package-control {
     grid-template-columns: 1fr;
@@ -1385,16 +1565,24 @@ blockquote cite {
 
 @media (max-width: 430px) {
   .hero-section {
-    min-height: 660px;
-    padding-inline: 30px;
+    min-height: 100svh;
+    padding-inline: 24px;
   }
 
   .content-section {
-    padding-inline: 30px;
+    padding-inline: 24px;
   }
 
   .netflix-logo {
     font-size: 50px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(28px, 8vw, 34px);
+  }
+
+  .episode-cover {
+    min-height: 360px;
   }
 
   .metric-grid,

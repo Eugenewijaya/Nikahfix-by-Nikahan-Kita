@@ -516,21 +516,54 @@ function Countdown({ target }) {
 }
 
 function StorySection({ invitation }) {
+  const [selectedStory, setSelectedStory] = useState(null);
+
   return (
     <section className="content-section">
       <h2>Our Love Story</h2>
-      <div className="story-list">
+      <div className="episode-shelf">
         {invitation.stories.map((story) => (
-          <article className="story-card" key={story.id}>
+          <article className="episode-cover" key={story.id}>
             <img src={story.image || imageFallback} alt="" />
-            <div>
-              <span>{story.episode}</span>
+            <div className="episode-gradient" />
+            <div className="episode-cover-copy">
+              <span className="episode-label">{story.episode}</span>
               <h3>{story.title}</h3>
-              <p>{story.body}</p>
+              <div className="episode-meta">
+                <span>{story.rating || 'SU'}</span>
+                <span>{story.duration || '03 min read'}</span>
+              </div>
+              <button type="button" onClick={() => setSelectedStory(story)}>
+                <Play size={14} fill="currentColor" />
+                Lihat Detail
+              </button>
             </div>
           </article>
         ))}
       </div>
+      {selectedStory && (
+        <div className="story-modal" role="dialog" aria-modal="true" aria-label={`Detail ${selectedStory.title}`}>
+          <div className="story-modal-card">
+            <button className="story-modal-close" type="button" onClick={() => setSelectedStory(null)} aria-label="Tutup detail episode">
+              <XCircle size={24} />
+            </button>
+            <div className="story-modal-poster">
+              <img src={selectedStory.image || imageFallback} alt="" />
+            </div>
+            <div className="story-modal-copy">
+              <span className="netflix-n">N</span>
+              <span className="episode-label">{selectedStory.episode}</span>
+              <h3>{selectedStory.title}</h3>
+              <div className="film-meta">
+                <span className="match">100% match</span>
+                <span className="rating">{selectedStory.rating || 'SU'}</span>
+                <span>{selectedStory.duration || '03 min read'}</span>
+              </div>
+              <p>{selectedStory.body}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1102,7 +1135,7 @@ function GuestRsvpEditor({ draft, setDraft }) {
           <textarea
             value={bulkNames}
             onChange={(event) => setBulkNames(event.target.value)}
-            placeholder={'Bapak Andi & Keluarga\nIbu Maria\nKeluarga Besar Siregar'}
+            placeholder={'Bapak/Ibu Nama Tamu 1\nKeluarga Nama Tamu 2\nNama Tamu 3'}
           />
         </label>
         <p className="helper-text">

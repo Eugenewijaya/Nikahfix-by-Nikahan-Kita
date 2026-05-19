@@ -7,6 +7,16 @@ function clone(value) {
 }
 
 export function normalizeInvitation(saved = {}) {
+  if (isLegacyDemoState(saved)) {
+    return normalizeInvitation({
+      ...clone(defaultInvitation),
+      packageConfig: saved.packageConfig || defaultInvitation.packageConfig,
+      guests: saved.guests || defaultInvitation.guests,
+      rsvps: saved.rsvps || [],
+      checkIns: saved.checkIns || [],
+    });
+  }
+
   const guests = normalizeGuests(saved.guests || defaultInvitation.guests);
   return {
     ...clone(defaultInvitation),
@@ -28,6 +38,33 @@ export function normalizeInvitation(saved = {}) {
     rsvps: saved.rsvps || [],
     checkIns: saved.checkIns || [],
   };
+}
+
+function isLegacyDemoState(saved = {}) {
+  const haystack = [
+    saved.site?.eventSlug,
+    saved.hero?.title,
+    saved.film?.title,
+    saved.closing?.signature,
+    ...(saved.couple || []).map((item) => `${item.name || ''} ${item.detail || ''}`),
+    ...(saved.events || []).map((item) => `${item.venue || ''} ${item.address || ''}`),
+    ...((saved.gifts?.banks || []).map((item) => item.accountName || '')),
+    saved.gifts?.deliveryAddress,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return [
+    'gregory',
+    'dian',
+    'tampubolon',
+    'yudicia',
+    'marpaung',
+    'sembiring',
+    'wisma toga',
+    'medan tuntungan',
+    'menteng',
+  ].some((word) => haystack.includes(word));
 }
 
 function normalizeGuests(guests) {

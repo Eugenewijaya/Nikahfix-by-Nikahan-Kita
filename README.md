@@ -43,7 +43,7 @@ Open:
 
 - Invitation: `http://127.0.0.1:5173/`
 - Admin: `http://127.0.0.1:5173/admin`
-- Example guest URL: `http://127.0.0.1:5173/nikahan-kita-gregory-dian/contoh-nama-tamu`
+- Example guest URL: `http://127.0.0.1:5173/nikahan-kita-nama-pria-nama-wanita/contoh-nama-tamu`
 
 ## Build
 
