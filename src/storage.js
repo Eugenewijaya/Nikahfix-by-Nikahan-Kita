@@ -6,7 +6,7 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function mergeDefaults(saved) {
+export function normalizeInvitation(saved = {}) {
   const guests = normalizeGuests(saved.guests || defaultInvitation.guests);
   return {
     ...clone(defaultInvitation),
@@ -51,7 +51,7 @@ export function loadInvitation() {
   try {
     const raw = localStorage.getItem(INVITATION_KEY);
     if (!raw) return clone(defaultInvitation);
-    return mergeDefaults(JSON.parse(raw));
+    return normalizeInvitation(JSON.parse(raw));
   } catch {
     return clone(defaultInvitation);
   }

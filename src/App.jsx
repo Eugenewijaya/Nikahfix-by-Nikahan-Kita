@@ -33,6 +33,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { bankTypes, defaultInvitation } from './data.js';
+import { fetchRemoteInvitation, saveRemoteInvitation } from './apiClient.js';
 import { loadInvitation, makeId, makeToken, resetInvitation, saveInvitation } from './storage.js';
 
 const imageFallback =
@@ -171,14 +172,31 @@ async function exportGuestPdf(invitation) {
 export default function App() {
   const [route] = useState(getRoute);
   const [invitation, setInvitation] = useState(loadInvitation);
+  const [syncStatus, setSyncStatus] = useState('local');
+
+  useEffect(() => {
+    let active = true;
+
+    fetchRemoteInvitation().then((remoteInvitation) => {
+      if (!active || !remoteInvitation) return;
+      setInvitation(remoteInvitation);
+      saveInvitation(remoteInvitation);
+      setSyncStatus('database');
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const persist = (next) => {
     setInvitation(next);
     saveInvitation(next);
+    saveRemoteInvitation(next).then((ok) => setSyncStatus(ok ? 'database' : 'local'));
   };
 
   if (route.type === 'admin') {
-    return <AdminApp invitation={invitation} onSave={persist} />;
+    return <AdminApp invitation={invitation} onSave={persist} syncStatus={syncStatus} />;
   }
 
   if (route.type === 'checkin') {
@@ -660,7 +678,7 @@ function ClosingSection({ invitation }) {
   );
 }
 
-function AdminApp({ invitation, onSave }) {
+function AdminApp({ invitation, onSave, syncStatus }) {
   const [draft, setDraft] = useState(invitation);
   const [tab, setTab] = useState('content');
   const [saved, setSaved] = useState(false);
@@ -707,6 +725,9 @@ function AdminApp({ invitation, onSave }) {
           <div>
             <h1>Admin Invitation Studio</h1>
             <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, QR check-in, dan paket fitur.</p>
+            <span className={`sync-badge ${syncStatus === 'database' ? 'online' : ''}`}>
+              {syncStatus === 'database' ? 'Database Neon aktif' : 'Mode lokal / menunggu API'}
+            </span>
           </div>
           <div className="admin-actions">
             <button className="ghost-button" type="button" onClick={() => setDraft(resetInvitation())}>

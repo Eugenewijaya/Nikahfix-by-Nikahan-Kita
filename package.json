@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@vitejs/plugin-react": "^5.1.1",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",

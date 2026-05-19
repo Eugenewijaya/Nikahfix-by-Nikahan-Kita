@@ -28,7 +28,9 @@ This repository is intended as a **master template** for client deployments. All
 - `qrcode` for guest QR generation
 - `html5-qrcode` for browser camera scanning
 - `jspdf` and `jspdf-autotable` for PDF export
-- Browser `localStorage` for the current template data layer
+- Vercel Functions for shared persistence
+- Neon Postgres for production storage
+- Browser `localStorage` fallback when API/database is not configured
 
 ## Local Development
 
@@ -74,17 +76,25 @@ Important: in the current template, `DATABASE_URL` is documented but not used ye
 
 ## Current Data Layer Status
 
-The current implementation stores invitation settings, guests, RSVP, and check-in records in `localStorage`.
+The current implementation includes a lightweight Vercel Functions backend at `api/state.js`.
+
+In production, the frontend attempts to read/write shared state through:
+
+```text
+GET /api/state
+PUT /api/state
+```
+
+The API stores the invitation state as JSON in Neon Postgres table `invitation_state`. This is intentionally simple for the first production version and keeps hosting cost low.
 
 That means:
 
-- Admin CRUD works in the same browser.
-- Guest RSVP works in the same browser storage context.
-- Export and QR check-in flows work for template/demo validation.
-- Data is not shared across devices yet.
-- Data will reset if browser storage is cleared.
+- Admin CRUD can be shared across devices when `DATABASE_URL` is configured.
+- Guest RSVP can be shared across devices when `DATABASE_URL` is configured.
+- Export and QR check-in flows read from the same state.
+- If the API/database is unavailable, the app falls back to browser `localStorage`.
 
-For real client production, migrate the data layer to:
+For a larger multi-client SaaS version, normalize the data layer to:
 
 ```text
 Vercel Static Frontend
@@ -94,7 +104,7 @@ Vercel Functions API
 Neon Postgres
 ```
 
-Recommended backend tables:
+Recommended future normalized tables:
 
 - `events`
 - `invitation_settings`
@@ -104,7 +114,7 @@ Recommended backend tables:
 - `check_ins`
 - `admin_sessions`
 
-Recommended API routes:
+Recommended future API routes:
 
 - `GET /api/invitation`
 - `PUT /api/admin/invitation`
@@ -117,6 +127,23 @@ Recommended API routes:
 - `DELETE /api/rsvp/:id`
 - `POST /api/admin/check-in`
 - `GET /api/admin/guest-book`
+
+## Neon Postgres Setup
+
+You can connect Neon directly to Vercel without Railway.
+
+1. Create a Neon database.
+2. Copy the pooled connection string.
+3. In Vercel project settings, add:
+
+```env
+DATABASE_URL="postgresql://..."
+```
+
+4. Redeploy the Vercel project.
+5. Open `/admin`, make one save, and the app will create the `invitation_state` table automatically.
+
+Never commit the real `DATABASE_URL` to GitHub.
 
 ## QR Check-in Security Notes
 
@@ -151,10 +178,11 @@ Or enable it from GitHub:
 - [x] Bulk guest links and WhatsApp template UI are available.
 - [x] Guest-book export UI is available.
 - [x] QR check-in template flow is available.
-- [ ] Backend persistence with Neon Postgres.
+- [x] Lightweight backend persistence with Neon Postgres JSON state.
 - [ ] Admin authentication.
 - [ ] Server-side QR token validation.
 - [ ] Server-side package gating per client.
+- [ ] Future normalized relational schema for multi-client scale.
 - [ ] Optional Vercel Blob integration for uploaded media assets.
 
 ## License
