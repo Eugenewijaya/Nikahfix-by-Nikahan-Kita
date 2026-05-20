@@ -770,6 +770,7 @@ function InvitationApp({ invitation, onSave, recipientSlug }) {
   }, []);
 
   const openInvitation = () => {
+    document.activeElement?.blur?.();
     setOpened(true);
     window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'smooth' }), 620);
     if (invitation.music.enabled && audioRef.current) {
@@ -948,7 +949,7 @@ function NewsSection({ invitation }) {
 
 function CoupleSection({ invitation }) {
   return (
-    <section className="content-section reveal-on-scroll" data-reveal>
+    <section id="couple" className="content-section reveal-on-scroll" data-reveal>
       <h2>Bride & Groom</h2>
       <div className="person-list">
         {invitation.couple.map((person) => (
@@ -1057,7 +1058,7 @@ function StorySection({ invitation }) {
   const [selectedStory, setSelectedStory] = useState(null);
 
   return (
-    <section className="content-section reveal-on-scroll" data-reveal>
+    <section id="love-story" className="content-section reveal-on-scroll" data-reveal>
       <h2>Our Love Story</h2>
       <div className="episode-shelf">
         {invitation.stories.map((story) => (

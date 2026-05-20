@@ -759,6 +759,18 @@ blockquote cite {
   gap: 18px;
 }
 
+.person-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 30px;
+  align-items: start;
+}
+
+.person-card {
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+}
+
 .person-card img,
 .event-card img,
 .story-card img {
@@ -770,9 +782,22 @@ blockquote cite {
   mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
 }
 
+.person-card img {
+  height: auto;
+  aspect-ratio: 0.78 / 1;
+  border-radius: 8px;
+  object-position: center top;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .person-card > div,
 .story-card > div {
   padding: 18px;
+}
+
+.person-card > div {
+  padding: 14px 0 0;
 }
 
 .event-card {
@@ -821,6 +846,10 @@ blockquote cite {
   font-weight: 900;
 }
 
+.person-card span {
+  display: none;
+}
+
 .person-card h3,
 .event-card h3,
 .story-card h3,
@@ -828,6 +857,18 @@ blockquote cite {
   margin-bottom: 10px;
   font-size: 21px;
   line-height: 1.2;
+}
+
+.person-card h3 {
+  margin-bottom: 7px;
+  font-size: clamp(16px, 4.2vw, 19px);
+}
+
+.person-card p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: clamp(14px, 3.8vw, 16px);
+  line-height: 1.48;
 }
 
 .episode-shelf {
@@ -893,8 +934,8 @@ blockquote cite {
 .episode-cover h3 {
   margin: 0;
   color: #fff;
-  font-size: clamp(22px, 5.7vw, 28px);
-  line-height: 1.45;
+  font-size: clamp(15px, 4vw, 20px);
+  line-height: 1.36;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
@@ -906,8 +947,8 @@ blockquote cite {
 .episode-body p {
   margin: 0;
   color: #b9b9b9;
-  font-size: clamp(21px, 5.15vw, 26px);
-  line-height: 1.48;
+  font-size: clamp(15px, 3.6vw, 18px);
+  line-height: 1.52;
   overflow-wrap: anywhere;
 }
 
@@ -990,6 +1031,18 @@ blockquote cite {
   color: #fff;
   font-weight: 900;
   text-decoration-color: var(--accent);
+}
+
+.person-card a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ff1c28, var(--accent));
+  box-shadow: 0 10px 28px rgba(217, 32, 40, 0.22);
+  line-height: 1;
+  text-decoration: none;
 }
 
 .event-copy strong {
@@ -2587,7 +2640,7 @@ blockquote cite {
   }
 
   .episode-body p {
-    font-size: 24px;
+    font-size: 17px;
   }
 
   .event-card {
