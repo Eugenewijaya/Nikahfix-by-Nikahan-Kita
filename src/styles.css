@@ -228,19 +228,47 @@ img {
   }
 }
 
-.netflix-logo,
-.mini-logo,
-.admin-brand {
-  font-family: "Bebas Neue", Impact, sans-serif;
-  color: var(--accent);
-  line-height: 1;
-  letter-spacing: 0;
-  text-shadow: 0 0 24px rgba(229, 9, 20, 0.25);
+.brand-logo {
+  width: var(--brand-width, 136px);
+  max-width: 100%;
+  line-height: 0;
 }
 
-.netflix-logo {
+.brand-logo img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 18px rgba(229, 9, 20, 0.32));
+}
+
+.brand-logo span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.brand-logo-cover {
+  --brand-width: 222px;
   margin-bottom: 46px;
-  font-size: 52px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.brand-logo-mini {
+  --brand-width: 132px;
+  margin-bottom: 26px;
+}
+
+.brand-logo-phone {
+  --brand-width: 126px;
+  margin-bottom: 16px;
+}
+
+.brand-logo-admin {
+  --brand-width: 148px;
+  margin-bottom: 30px;
 }
 
 .cover-stack p {
@@ -404,11 +432,6 @@ img {
 .hero-copy {
   width: 100%;
   padding-top: 180px;
-}
-
-.mini-logo {
-  margin-bottom: 26px;
-  font-size: 34px;
 }
 
 h1,
@@ -1432,12 +1455,6 @@ blockquote cite {
     linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent 54%);
 }
 
-.demo-phone-hero span {
-  font-family: "Bebas Neue", Impact, sans-serif;
-  color: var(--accent);
-  font-size: 34px;
-}
-
 .demo-phone-hero h3 {
   margin: 14px 0 8px;
   font-size: 31px;
@@ -1537,11 +1554,6 @@ blockquote cite {
   padding: 28px 18px;
   border-right: 1px solid var(--line);
   background: #000;
-}
-
-.admin-brand {
-  margin-bottom: 30px;
-  font-size: 42px;
 }
 
 .admin-sidebar nav {
@@ -2088,8 +2100,8 @@ blockquote cite {
     padding-inline: 24px;
   }
 
-  .netflix-logo {
-    font-size: 50px;
+  .brand-logo-cover {
+    --brand-width: 214px;
   }
 
   .hero-copy h1 {

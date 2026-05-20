@@ -7,6 +7,7 @@ This repository is designed as a master template for client deployments. All pac
 ## Highlights
 
 - Cinematic invitation flow: preloader, profile cover, open invitation animation, hero, film metadata, story episodes, memories gallery, gift section, RSVP, wishes wall, and music playback.
+- Branded Nikahfix logo and favicon assets served from `public/`.
 - Animated scroll experience with section reveal, progress rail, floating wishes, stronger black photo gradients, compact event layout, and closing image treatment.
 - Admin studio for editing content, couple profiles, event locations, stories, gallery URLs, bank/gift accounts, guests, RSVP records, package config, and QR scan data.
 - Bulk guest link creation from plain text names.

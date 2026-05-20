@@ -42,6 +42,7 @@ import { loadInvitation, makeId, makeToken, resetInvitation, saveInvitation } fr
 
 const imageFallback =
   'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=900&q=82';
+const brandLogoSrc = '/nikahfix-logo.webp';
 
 function getRoute() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -236,7 +237,7 @@ function CheckInLanding({ invitation, token }) {
     <main className="checkin-landing">
       <div className="checkin-card">
         <ShieldCheck size={34} />
-        <div className="mini-logo">{invitation.brand}</div>
+        <BrandLogo label={invitation.brand} variant="mini" />
         <h1>QR Check-in</h1>
         <p>
           QR ini terdaftar untuk {guest?.name || 'tamu undangan'}, dan validasinya dilakukan melalui scanner admin.
@@ -439,7 +440,7 @@ function DemoPage() {
       <section className="demo-studio">
         <header className="demo-header">
           <div>
-            <div className="mini-logo">NIKAHFIX</div>
+            <BrandLogo label="NIKAHFIX" variant="mini" />
             <h1>Demo Invitation Studio</h1>
             <p>Calon client cukup isi detail kecil, upload foto sementara, lalu langsung melihat simulasi undangan tanpa menyimpan ke database.</p>
           </div>
@@ -515,7 +516,7 @@ function DemoPhonePreview({ invitation }) {
       <div className="demo-phone-hero" style={{ '--hero-image': `url("${invitation.hero.heroImage || imageFallback}")` }}>
         <div className="demo-phone-fade" />
         <div>
-          <span>{invitation.brand}</span>
+          <BrandLogo label={invitation.brand} variant="phone" />
           <h3>{invitation.hero.title}</h3>
           <p>{invitation.hero.dateLabel}</p>
         </div>
@@ -692,7 +693,7 @@ function CoverLayer({ invitation, guestName, opened, onOpen }) {
   return (
     <section className={`cover-layer ${opened ? 'cover-opened' : ''}`}>
       <div className="cover-stack">
-        <div className="netflix-logo">{invitation.brand}</div>
+        <BrandLogo label={invitation.brand} variant="cover" />
         <p>{invitation.cover.prompt}</p>
         <div className="profile-face" aria-hidden="true">
           <span />
@@ -713,7 +714,7 @@ function HeroSection({ invitation, heroRef }) {
     <section ref={heroRef} className="hero-section" style={{ '--hero-image': `url("${invitation.hero.heroImage || imageFallback}")` }}>
       <div className="hero-vignette" />
       <div className="hero-copy reveal-up">
-        <div className="mini-logo">{invitation.brand}</div>
+        <BrandLogo label={invitation.brand} variant="mini" />
         <h1>
           {invitation.hero.title}
           <span>{invitation.hero.subtitle}</span>
@@ -878,6 +879,15 @@ function Countdown({ target }) {
           {label}
         </span>
       ))}
+    </div>
+  );
+}
+
+function BrandLogo({ label = 'NIKAHFIX', variant = 'mini' }) {
+  return (
+    <div className={`brand-logo brand-logo-${variant}`} aria-label={label}>
+      <img src={brandLogoSrc} alt="" aria-hidden="true" />
+      <span>{label}</span>
     </div>
   );
 }
@@ -1133,7 +1143,7 @@ function AdminApp({ invitation, onSave, syncStatus }) {
   return (
     <main className="admin-page">
       <aside className="admin-sidebar">
-        <div className="admin-brand">{draft.brand}</div>
+        <BrandLogo label={draft.brand} variant="admin" />
         <nav>
           {tabs.map(([key, Icon, label]) => (
             <button className={tab === key ? 'active' : ''} key={key} type="button" onClick={() => setTab(key)}>
