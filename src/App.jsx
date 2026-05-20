@@ -1090,6 +1090,7 @@ function GiftSection({ invitation, copied, onCopy }) {
 function RsvpSection({ invitation, guest, guestName, onSave, onDelete }) {
   const guestSlug = guest?.slug || slugify(guestName || 'tamu-undangan') || 'tamu-undangan';
   const existing = invitation.rsvps.find((rsvp) => rsvp.guestSlug === guestSlug);
+  const guestForQr = guest || invitation.guests.find((item) => item.slug === guestSlug);
   const [form, setForm] = useState(
     existing || {
       guestSlug,
@@ -1159,35 +1160,49 @@ function RsvpSection({ invitation, guest, guestName, onSave, onDelete }) {
           )}
         </div>
       </form>
+      {guestForQr?.qrToken && (
+        <article className="guest-confirmation-card">
+          <div>
+            <span className="confirmation-label">QR CHECK-IN</span>
+            <h3>{existing ? 'Konfirmasi tersimpan' : 'QR tamu undangan'}</h3>
+            <p>
+              QR ini khusus untuk {guestForQr.name}. Tunjukkan kepada panitia saat hadir agar check-in masuk otomatis ke buku tamu.
+            </p>
+          </div>
+          <div className="guest-qr-card">
+            <GuestQrCode invitation={invitation} guest={guestForQr} />
+            <strong>{guestForQr.name}</strong>
+          </div>
+        </article>
+      )}
     </section>
   );
 }
 
 function WishWallSection({ invitation }) {
-  const wishes = invitation.rsvps;
+  const wishes = invitation.rsvps.filter((item) => item.note?.trim());
 
   return (
     <section className="content-section wish-section reveal-on-scroll" data-reveal>
       <div className="section-title-row">
         <h2>Ucapan & Doa</h2>
-        <span>{wishes.length} inputan</span>
+        <span>{wishes.length} pesan</span>
       </div>
       {wishes.length === 0 ? (
         <div className="wish-empty">
           <MessageCircle size={24} />
           <strong>Belum ada ucapan masuk</strong>
-          <p>Setiap RSVP dan ucapan dari tamu akan tampil di sini sebagai wall animasi.</p>
+          <p>Setiap ucapan dari tamu akan tampil di sini sebagai wall animasi.</p>
         </div>
       ) : (
         <div className="wish-wall">
           {wishes.map((item, index) => (
             <article className="wish-card" key={item.id || item.guestSlug} style={{ '--delay': `${Math.min(index * 90, 720)}ms` }}>
+              <Sparkles size={18} aria-hidden="true" />
               <div className="wish-card-head">
                 <strong>{item.guestName}</strong>
-                <span>{item.attendance} - {item.pax} tamu</span>
               </div>
-              <p>{item.note || 'Terima kasih, RSVP sudah tercatat.'}</p>
-              <small>{item.updatedAt ? new Date(item.updatedAt).toLocaleString('id-ID') : 'Baru saja'}</small>
+              <p>{item.note}</p>
             </article>
           ))}
         </div>
@@ -1333,7 +1348,7 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
         {tab === 'story' && <StoryGalleryEditor draft={draft} setDraft={setDraft} />}
         {tab === 'gifts' && <GiftEditor draft={draft} setDraft={setDraft} />}
         {tab === 'guests' && <GuestRsvpEditor draft={draft} setDraft={setDraft} />}
-        {tab === 'guestbook' && <GuestBookEditor draft={draft} />}
+        {tab === 'guestbook' && <GuestBookEditor draft={draft} setDraft={setDraft} />}
         {tab === 'scanner' && <ScannerEditor draft={draft} setDraft={setDraft} onSave={onSave} />}
         {tab === 'packages' && <PackageEditor draft={draft} setDraft={setDraft} />}
       </section>
@@ -1826,9 +1841,19 @@ function GuestQrCode({ invitation, guest }) {
   return src ? <img src={src} alt={`QR check-in ${guest.name}`} /> : <div className="qr-skeleton" />;
 }
 
-function GuestBookEditor({ draft }) {
+function GuestBookEditor({ draft, setDraft }) {
   const rows = guestRows(draft);
   const summary = summarizeGuests(draft);
+  const messageRows = rows.filter((row) => row.rsvp?.note?.trim());
+
+  const clearMessage = (guestSlug) => {
+    setDraft((prev) => ({
+      ...prev,
+      rsvps: prev.rsvps.map((rsvp) =>
+        rsvp.guestSlug === guestSlug ? { ...rsvp, note: '', moderatedAt: new Date().toISOString() } : rsvp,
+      ),
+    }));
+  };
 
   return (
     <section className="editor-panel wide">
@@ -1854,6 +1879,36 @@ function GuestBookEditor({ draft }) {
         <MetricCard label="Sudah Check-in" value={summary.checkedIn} icon={<UserCheck size={18} />} />
         <MetricCard label="Belum RSVP" value={summary.pending} icon={<XCircle size={18} />} />
       </div>
+      <section className="message-admin-panel">
+        <div className="panel-title-row compact">
+          <div>
+            <h3>Pesan Masuk</h3>
+            <p className="helper-text">Moderasi ucapan yang tampil di halaman undangan. Klik Simpan Semua setelah menghapus pesan.</p>
+          </div>
+          <span className="status-pill">{messageRows.length} pesan</span>
+        </div>
+        {messageRows.length === 0 ? (
+          <div className="empty-admin-state">
+            <MessageCircle size={18} />
+            Belum ada pesan yang perlu dimoderasi.
+          </div>
+        ) : (
+          <div className="message-admin-list">
+            {messageRows.map((row) => (
+              <article className="message-admin-card" key={`message-${row.guest.id}`}>
+                <div>
+                  <strong>{row.rsvp.guestName || row.guest.name}</strong>
+                  <p>{row.rsvp.note}</p>
+                </div>
+                <button className="danger-button compact" type="button" onClick={() => clearMessage(row.guest.slug)}>
+                  <Trash2 size={15} />
+                  Hapus Pesan
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
       <div className="table-wrap">
         <table className="guest-table">
           <thead>
@@ -1864,6 +1919,7 @@ function GuestBookEditor({ draft }) {
               <th>Jumlah</th>
               <th>Ucapan</th>
               <th>Check-in</th>
+              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -1879,6 +1935,16 @@ function GuestBookEditor({ draft }) {
                 <td>{row.pax}</td>
                 <td>{row.note || '-'}</td>
                 <td>{row.checkedInAt ? new Date(row.checkedInAt).toLocaleString('id-ID') : 'Belum hadir'}</td>
+                <td>
+                  {row.rsvp?.note?.trim() ? (
+                    <button className="danger-button compact" type="button" onClick={() => clearMessage(row.guest.slug)}>
+                      <Trash2 size={15} />
+                      Hapus Pesan
+                    </button>
+                  ) : (
+                    '-'
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

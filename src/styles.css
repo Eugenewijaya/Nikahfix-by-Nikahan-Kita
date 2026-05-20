@@ -1168,6 +1168,87 @@ blockquote cite {
   gap: 10px;
 }
 
+.guest-confirmation-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  gap: 16px;
+  align-items: center;
+  margin-top: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 88% 10%, rgba(229, 9, 20, 0.28), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025)),
+    #070707;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.36);
+}
+
+.guest-confirmation-card::before {
+  content: "";
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  right: -46px;
+  bottom: -50px;
+  border-radius: 50%;
+  border: 1px solid rgba(229, 9, 20, 0.36);
+}
+
+.guest-confirmation-card h3 {
+  margin: 6px 0 8px;
+  color: #fff;
+  font-size: 22px;
+  line-height: 1.08;
+}
+
+.guest-confirmation-card p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.confirmation-label {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #fff;
+  background: rgba(217, 32, 40, 0.86);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.guest-qr-card {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 10px;
+  color: #111;
+  background: #fff;
+}
+
+.guest-qr-card img,
+.guest-qr-card .qr-skeleton {
+  width: 132px;
+  height: 132px;
+}
+
+.guest-qr-card strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #111;
+  font-size: 12px;
+  text-align: center;
+}
+
 .ghost-button {
   padding: 0 14px;
   background: rgba(255, 255, 255, 0.04);
@@ -1246,10 +1327,10 @@ blockquote cite {
 }
 
 .wish-card {
-  padding: 16px;
+  padding: 18px 18px 18px 20px;
   opacity: 0;
-  transform: translateY(26px) rotateX(8deg) scale(0.96);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+  transform: translateY(28px) rotateX(9deg) scale(0.94);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.3);
 }
 
 .wish-section.is-visible .wish-card {
@@ -1267,39 +1348,59 @@ blockquote cite {
   box-shadow: 0 0 22px rgba(229, 9, 20, 0.44);
 }
 
+.wish-card::after {
+  content: "";
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 32%, rgba(255, 255, 255, 0.62) 0 3px, transparent 4px),
+    radial-gradient(circle at 68% 22%, rgba(255, 96, 107, 0.7) 0 5px, transparent 6px),
+    radial-gradient(circle at 52% 72%, rgba(229, 9, 20, 0.75) 0 4px, transparent 5px);
+  filter: blur(0.1px);
+  opacity: 0.72;
+  pointer-events: none;
+  animation: wish-confetti 3.8s ease-in-out infinite;
+}
+
+.wish-card > svg {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 12px rgba(229, 9, 20, 0.7));
+  animation: wish-sparkle 2.6s ease-in-out infinite;
+}
+
 .wish-card-head {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin: 0 28px 10px 0;
 }
 
-.wish-card-head strong,
-.wish-card-head span {
+.wish-card-head strong {
   display: block;
 }
 
 .wish-card-head strong {
   min-width: 0;
+  color: #fff;
+  font-size: 17px;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.wish-card-head span {
-  flex: 0 0 auto;
-  color: var(--green);
-  font-size: 12px;
-  font-weight: 900;
-}
-
 .wish-card p {
-  margin: 0 0 12px;
-  color: var(--muted);
-  line-height: 1.62;
-}
-
-.wish-card small {
-  color: var(--soft);
-  font-weight: 700;
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.64;
+  overflow-wrap: anywhere;
 }
 
 .wish-empty {
@@ -1337,6 +1438,28 @@ blockquote cite {
   }
   50% {
     translate: 0 -5px;
+  }
+}
+
+@keyframes wish-sparkle {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: rotate(-8deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(8deg) scale(1.12);
+  }
+}
+
+@keyframes wish-confetti {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(-6px, -8px, 0) rotate(18deg);
   }
 }
 
@@ -1936,6 +2059,72 @@ blockquote cite {
   text-transform: uppercase;
 }
 
+.panel-title-row.compact {
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.panel-title-row.compact h3 {
+  margin: 0 0 4px;
+  color: #fff;
+}
+
+.message-admin-panel {
+  margin: 20px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(217, 32, 40, 0.16), transparent 34%),
+    rgba(255, 255, 255, 0.035);
+}
+
+.message-admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.message-admin-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.message-admin-card strong {
+  display: block;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.message-admin-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.empty-admin-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--muted);
+}
+
+.danger-button.compact {
+  min-height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -2155,8 +2344,15 @@ blockquote cite {
   }
 
   .guest-admin-card,
+  .guest-confirmation-card,
+  .message-admin-card,
   .package-control {
     grid-template-columns: 1fr;
+  }
+
+  .guest-qr-card,
+  .qr-preview-card {
+    width: fit-content;
   }
 }
 
@@ -2215,6 +2411,14 @@ blockquote cite {
 
   .event-head .soft-pill {
     font-size: 11px;
+  }
+
+  .guest-confirmation-card {
+    padding: 14px;
+  }
+
+  .guest-qr-card {
+    justify-self: center;
   }
 
   .wish-card-head {
