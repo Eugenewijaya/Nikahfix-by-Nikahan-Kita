@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Calendar,
+  Camera,
   CheckCircle2,
   ClipboardList,
   Copy,
@@ -22,11 +23,14 @@ import {
   Play,
   Plus,
   QrCode,
+  RefreshCw,
   Save,
   ScanLine,
   Send,
   ShieldCheck,
+  Sparkles,
   Trash2,
+  Upload,
   UserCheck,
   Users,
   Volume2,
@@ -41,6 +45,7 @@ const imageFallback =
 
 function getRoute() {
   const parts = window.location.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'demo') return { type: 'demo' };
   if (parts[0] === 'admin') return { type: 'admin' };
   if (parts[0] === 'checkin') return { type: 'checkin', eventSlug: parts[1], token: parts[2] };
   if (parts[0] === 'invite') return { type: 'invite', slug: parts[1] };
@@ -72,6 +77,10 @@ function eventSlug(invitation) {
 
 function coupleName(invitation) {
   return `${invitation.hero.title} ${invitation.hero.subtitle}`.replace(/\s+/g, ' ').replace(/: /g, ' ').trim();
+}
+
+function cloneInvitation(value = defaultInvitation) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function guestLink(invitation, guest, origin = window.location.origin) {
@@ -171,6 +180,15 @@ async function exportGuestPdf(invitation) {
 
 export default function App() {
   const [route] = useState(getRoute);
+
+  if (route.type === 'demo') {
+    return <DemoPage />;
+  }
+
+  return <PersistentApp route={route} />;
+}
+
+function PersistentApp({ route }) {
   const [invitation, setInvitation] = useState(loadInvitation);
   const [syncStatus, setSyncStatus] = useState('local');
 
@@ -231,6 +249,347 @@ function CheckInLanding({ invitation, token }) {
   );
 }
 
+const defaultDemoForm = {
+  groomName: '',
+  brideName: '',
+  guestName: 'Calon Tamu',
+  weddingDate: '2026-12-12T09:00',
+  venue: '',
+  city: '',
+  storySeed: '',
+  heroImage: '',
+  galleryImages: [],
+};
+
+function formatDemoDate(value) {
+  if (!value) return 'Tanggal Pernikahan';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Tanggal Pernikahan';
+  return date.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function formatDemoTime(value) {
+  if (!value) return 'Jam Mulai';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Jam Mulai';
+  return `${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} s.d. selesai`;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildDemoInvitation(form) {
+  const groom = form.groomName.trim() || 'Nama Pria';
+  const bride = form.brideName.trim() || 'Nama Wanita';
+  const guestName = form.guestName.trim() || 'Calon Tamu';
+  const dateLabel = formatDemoDate(form.weddingDate);
+  const timeLabel = formatDemoTime(form.weddingDate);
+  const venue = form.venue.trim() || 'Nama Venue Pernikahan';
+  const city = form.city.trim() || 'Kota atau alamat acara';
+  const storySeed = form.storySeed.trim() || 'awal yang sederhana, proses saling mengenal, dan keputusan untuk bertumbuh bersama';
+  const heroImage = form.heroImage || defaultInvitation.hero.heroImage;
+  const gallery = [form.heroImage, ...form.galleryImages, ...defaultInvitation.gallery].filter(Boolean).slice(0, 9);
+  const guestSlug = slugify(guestName) || 'calon-tamu';
+  const coupleSlug = slugify(`${groom} ${bride}`) || 'nama-pria-nama-wanita';
+
+  return {
+    ...cloneInvitation(defaultInvitation),
+    site: {
+      ...defaultInvitation.site,
+      eventSlug: `nikahan-kita-${coupleSlug}`,
+    },
+    cover: {
+      ...defaultInvitation.cover,
+      guestFallback: guestName,
+    },
+    hero: {
+      ...defaultInvitation.hero,
+      title: `${groom} & ${bride}:`,
+      dateLabel,
+      weddingDate: form.weddingDate || defaultInvitation.hero.weddingDate,
+      heroImage,
+      trailerImage: heroImage,
+      tags: [`#${groom.replace(/\s/g, '')}${bride.replace(/\s/g, '')}`, '#FinalEpisodeOfLove', '#NikahanKita'],
+    },
+    film: {
+      ...defaultInvitation.film,
+      title: `"${groom} & ${bride}: Final Episode of Love"`,
+      release: dateLabel,
+      scheduleLabel: `Coming soon on ${dateLabel}`,
+      synopsis: `${groom} dan ${bride} ingin membagikan kabar bahagia tentang hari yang mereka nanti. Undangan ini menjadi cuplikan kecil dari perjalanan mereka menuju janji pernikahan.`,
+    },
+    news: {
+      ...defaultInvitation.news,
+      image: heroImage,
+      paragraphs: [
+        `Hai ${guestName}, dengan penuh sukacita ${groom} dan ${bride} mengundang Anda menjadi bagian dari hari pernikahan mereka.`,
+        `Semoga kehadiran dan doa baik Anda membuat hari ini semakin hangat dan berkesan.`,
+        'Best regards,',
+        `${groom} & ${bride}`,
+      ],
+    },
+    couple: [
+      {
+        ...defaultInvitation.couple[0],
+        name: groom,
+        detail: `Calon mempelai pria yang siap memulai babak baru bersama ${bride}.`,
+        image: heroImage,
+      },
+      {
+        ...defaultInvitation.couple[1],
+        name: bride,
+        detail: `Calon mempelai wanita yang akan melangkah bersama ${groom}.`,
+        image: form.galleryImages[0] || heroImage,
+      },
+    ],
+    events: [
+      {
+        ...defaultInvitation.events[0],
+        name: 'Akad / Pemberkatan',
+        date: dateLabel,
+        time: timeLabel,
+        venue,
+        address: city,
+        image: form.galleryImages[1] || heroImage,
+      },
+      {
+        ...defaultInvitation.events[1],
+        date: dateLabel,
+        time: timeLabel,
+        venue: `Resepsi di ${venue}`,
+        address: city,
+        image: form.galleryImages[2] || heroImage,
+      },
+    ],
+    stories: [
+      {
+        ...defaultInvitation.stories[0],
+        title: 'Awal yang Tidak Terduga',
+        body: `Cerita ${groom} dan ${bride} bermula dari ${storySeed}. Dari sana, percakapan kecil perlahan menjadi tempat pulang yang hangat.`,
+        image: form.galleryImages[3] || heroImage,
+      },
+      {
+        ...defaultInvitation.stories[1],
+        title: 'Bertumbuh Bersama',
+        body: `Mereka belajar bahwa cinta bukan hanya tentang hari yang mudah, tetapi juga tentang memilih saling menjaga saat keadaan tidak selalu sempurna.`,
+        image: form.galleryImages[4] || heroImage,
+      },
+      {
+        ...defaultInvitation.stories[2],
+        title: 'Satu Janji',
+        body: `Kini ${groom} dan ${bride} siap merayakan janji mereka bersama keluarga, sahabat, dan orang-orang yang berarti.`,
+        image: form.galleryImages[5] || heroImage,
+      },
+    ],
+    gallery,
+    closing: {
+      ...defaultInvitation.closing,
+      body: `Terima kasih telah berbagi doa, waktu, dan kehangatan untuk ${groom} dan ${bride}. Semoga hari ini menjadi awal cerita yang penuh kasih.`,
+      signature: `${groom} & ${bride}`,
+    },
+    guests: [{ id: 'demo-guest', name: guestName, slug: guestSlug, qrToken: 'qr-demo-preview' }],
+    rsvps: [],
+    checkIns: [],
+  };
+}
+
+function DemoPage() {
+  const [form, setForm] = useState(defaultDemoForm);
+  const [demoState, setDemoState] = useState({ rsvps: [], checkIns: [] });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const invitation = useMemo(() => {
+    const built = buildDemoInvitation(form);
+    return { ...built, rsvps: demoState.rsvps, checkIns: demoState.checkIns };
+  }, [demoState, form]);
+
+  const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const updateDemoState = (next) => setDemoState({ rsvps: next.rsvps || [], checkIns: next.checkIns || [] });
+
+  const uploadHero = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await fileToDataUrl(file);
+    updateForm('heroImage', dataUrl);
+  };
+
+  const uploadGallery = async (event) => {
+    const files = Array.from(event.target.files || []).slice(0, 6);
+    if (files.length === 0) return;
+    const dataUrls = await Promise.all(files.map(fileToDataUrl));
+    updateForm('galleryImages', dataUrls);
+  };
+
+  const resetDemo = () => {
+    setForm(defaultDemoForm);
+    setDemoState({ rsvps: [], checkIns: [] });
+  };
+
+  return (
+    <main className="demo-page">
+      <section className="demo-studio">
+        <header className="demo-header">
+          <div>
+            <div className="mini-logo">NIKAHFIX</div>
+            <h1>Demo Invitation Studio</h1>
+            <p>Calon client cukup isi detail kecil, upload foto sementara, lalu langsung melihat simulasi undangan tanpa menyimpan ke database.</p>
+          </div>
+          <a className="ghost-button" href="/">
+            Lihat Template Utama
+          </a>
+        </header>
+
+        <div className="demo-grid">
+          <form className="demo-panel demo-form">
+            <div className="panel-title-row">
+              <h2>Isi Cepat</h2>
+              <span className="count-label">No database</span>
+            </div>
+            <TextField label="Nama Mempelai Pria" value={form.groomName} onChange={(value) => updateForm('groomName', value)} />
+            <TextField label="Nama Mempelai Wanita" value={form.brideName} onChange={(value) => updateForm('brideName', value)} />
+            <TextField label="Nama Tamu Preview" value={form.guestName} onChange={(value) => updateForm('guestName', value)} />
+            <TextField label="Tanggal & Jam" type="datetime-local" value={form.weddingDate} onChange={(value) => updateForm('weddingDate', value)} />
+            <TextField label="Nama Venue" value={form.venue} onChange={(value) => updateForm('venue', value)} />
+            <TextField label="Kota / Alamat Singkat" textarea value={form.city} onChange={(value) => updateForm('city', value)} />
+            <TextField label="Gaya Cerita Singkat" textarea value={form.storySeed} onChange={(value) => updateForm('storySeed', value)} />
+
+            <label className="upload-drop">
+              <Upload size={20} />
+              Upload Foto Cover Sementara
+              <input type="file" accept="image/*" onChange={uploadHero} />
+            </label>
+            <label className="upload-drop">
+              <Camera size={20} />
+              Upload Foto Galeri Sementara
+              <input type="file" accept="image/*" multiple onChange={uploadGallery} />
+            </label>
+            <div className="demo-actions">
+              <button className="red-wide" type="button" onClick={() => setPreviewOpen(true)}>
+                <Sparkles size={16} />
+                Lihat Preview Full
+              </button>
+              <button className="ghost-button" type="button" onClick={resetDemo}>
+                <RefreshCw size={16} />
+                Reset Demo
+              </button>
+            </div>
+          </form>
+
+          <section className="demo-panel demo-preview-panel">
+            <div className="panel-title-row">
+              <h2>Live Preview</h2>
+              <button className="ghost-button" type="button" onClick={() => setPreviewOpen(true)}>
+                <Eye size={16} />
+                Buka
+              </button>
+            </div>
+            <DemoPhonePreview invitation={invitation} />
+          </section>
+        </div>
+      </section>
+
+      {previewOpen && (
+        <div className="demo-fullscreen">
+          <button className="story-modal-close demo-close" type="button" onClick={() => setPreviewOpen(false)} aria-label="Tutup preview demo">
+            <XCircle size={24} />
+          </button>
+          <InvitationApp invitation={invitation} onSave={updateDemoState} recipientSlug={invitation.guests[0]?.slug} />
+        </div>
+      )}
+    </main>
+  );
+}
+
+function DemoPhonePreview({ invitation }) {
+  return (
+    <div className="demo-phone">
+      <div className="demo-phone-hero" style={{ '--hero-image': `url("${invitation.hero.heroImage || imageFallback}")` }}>
+        <div className="demo-phone-fade" />
+        <div>
+          <span>{invitation.brand}</span>
+          <h3>{invitation.hero.title}</h3>
+          <p>{invitation.hero.dateLabel}</p>
+        </div>
+      </div>
+      <div className="demo-phone-section">
+        <h4>Date, Time & Location</h4>
+        <div className="demo-phone-event">
+          <img src={invitation.events[0]?.image || imageFallback} alt="" />
+          <div>
+            <strong>{invitation.events[0]?.name}</strong>
+            <span>{invitation.events[0]?.date}</span>
+            <p>{invitation.events[0]?.venue}</p>
+          </div>
+        </div>
+      </div>
+      <div className="demo-phone-section">
+        <h4>Our Love Story</h4>
+        <div className="demo-phone-story">
+          <img src={invitation.stories[0]?.image || imageFallback} alt="" />
+          <div>
+            <strong>{invitation.stories[0]?.title}</strong>
+            <p>{invitation.stories[0]?.body}</p>
+          </div>
+        </div>
+      </div>
+      <div className="demo-phone-gallery">
+        {invitation.gallery.slice(0, 6).map((src, index) => (
+          <img src={src || imageFallback} alt="" key={`${src}-${index}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function useCinematicScroll(enabled) {
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const shell = document.querySelector('.invitation-shell');
+    if (!shell) return undefined;
+
+    const nodes = Array.from(shell.querySelectorAll('[data-reveal]'));
+    nodes.forEach((node, index) => {
+      node.style.setProperty('--reveal-delay', `${Math.min((index % 5) * 70, 280)}ms`);
+    });
+
+    const updateProgress = () => {
+      const scrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, window.scrollY / scrollable));
+      shell.style.setProperty('--scroll-progress', progress.toFixed(3));
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.16, rootMargin: '0px 0px -8% 0px' },
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    updateProgress();
+    window.addEventListener('scroll', updateProgress, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', updateProgress);
+    };
+  }, [enabled]);
+}
+
 function InvitationApp({ invitation, onSave, recipientSlug }) {
   const [loading, setLoading] = useState(true);
   const [opened, setOpened] = useState(false);
@@ -243,6 +602,8 @@ function InvitationApp({ invitation, onSave, recipientSlug }) {
     return invitation.guests.find((item) => item.slug === recipientSlug) || null;
   }, [invitation.guests, recipientSlug]);
   const guestName = guest?.name || invitation.cover.guestFallback;
+
+  useCinematicScroll(opened);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setLoading(false), 950);
@@ -295,6 +656,9 @@ function InvitationApp({ invitation, onSave, recipientSlug }) {
       <audio ref={audioRef} loop src={invitation.music.src} />
       <CoverLayer invitation={invitation} guestName={guestName} opened={opened} onOpen={openInvitation} />
       <div className="invitation-shell" aria-hidden={!opened}>
+        <div className="cinema-progress" aria-hidden="true">
+          <span />
+        </div>
         <HeroSection invitation={invitation} heroRef={heroRef} />
         <FilmSection invitation={invitation} />
         <NewsSection invitation={invitation} />
@@ -304,6 +668,7 @@ function InvitationApp({ invitation, onSave, recipientSlug }) {
         <GallerySection invitation={invitation} />
         <GiftSection invitation={invitation} copied={copied} onCopy={flashCopy} />
         <RsvpSection invitation={invitation} guest={guest} guestName={guestName} onSave={saveRsvp} onDelete={deleteRsvp} />
+        <WishWallSection invitation={invitation} />
         <ClosingSection invitation={invitation} />
       </div>
       {opened && (
@@ -369,7 +734,7 @@ function HeroSection({ invitation, heroRef }) {
 
 function FilmSection({ invitation }) {
   return (
-    <section className="content-section film-section">
+    <section className="content-section film-section reveal-on-scroll" data-reveal>
       <div className="poster-frame">
         <img src={invitation.hero.trailerImage || imageFallback} alt="" />
         <button type="button" className="play-badge" aria-label="Play teaser">
@@ -405,7 +770,7 @@ function FilmSection({ invitation }) {
 
 function NewsSection({ invitation }) {
   return (
-    <section className="content-section">
+    <section className="content-section reveal-on-scroll" data-reveal>
       <h2>{invitation.news.title}</h2>
       <figure className="news-card">
         <img src={invitation.news.image || imageFallback} alt="" />
@@ -421,7 +786,7 @@ function NewsSection({ invitation }) {
 
 function CoupleSection({ invitation }) {
   return (
-    <section className="content-section">
+    <section className="content-section reveal-on-scroll" data-reveal>
       <h2>Bride & Groom</h2>
       <div className="person-list">
         {invitation.couple.map((person) => (
@@ -446,19 +811,21 @@ function CoupleSection({ invitation }) {
 
 function EventsSection({ invitation, onConfirm }) {
   return (
-    <section className="content-section">
+    <section className="content-section events-section reveal-on-scroll" data-reveal>
       <h2>Date, Time & Location</h2>
       <div className="event-list">
         {invitation.events.map((event) => (
           <article className="event-card" key={event.id}>
             <img src={event.image || imageFallback} alt="" />
-            <div className="event-copy">
+            <div className="event-head">
               <span className="red-pill">{event.name}</span>
               <h3>{event.date}</h3>
               <div className="meta-line">
                 <span className="soft-pill">{event.time}</span>
                 <span className="soft-pill">{event.timezone}</span>
               </div>
+            </div>
+            <div className="event-copy">
               <strong>{event.venue}</strong>
               <p>{event.address}</p>
               <a href={event.mapsUrl} target="_blank" rel="noreferrer">
@@ -519,7 +886,7 @@ function StorySection({ invitation }) {
   const [selectedStory, setSelectedStory] = useState(null);
 
   return (
-    <section className="content-section">
+    <section className="content-section reveal-on-scroll" data-reveal>
       <h2>Our Love Story</h2>
       <div className="episode-shelf">
         {invitation.stories.map((story) => (
@@ -570,7 +937,7 @@ function StorySection({ invitation }) {
 
 function GallerySection({ invitation }) {
   return (
-    <section className="content-section">
+    <section className="content-section memories-section reveal-on-scroll" data-reveal>
       <h2>Our Memories</h2>
       <div className="memory-grid">
         {invitation.gallery.map((src, index) => (
@@ -583,7 +950,7 @@ function GallerySection({ invitation }) {
 
 function GiftSection({ invitation, copied, onCopy }) {
   return (
-    <section className="content-section">
+    <section className="content-section reveal-on-scroll" data-reveal>
       <h2>Wedding Gift</h2>
       <p className="section-intro">{invitation.gifts.intro}</p>
       <div className="bank-list">
@@ -646,7 +1013,7 @@ function RsvpSection({ invitation, guest, guestName, onSave, onDelete }) {
   };
 
   return (
-    <section className="content-section rsvp-section" id="rsvp">
+    <section className="content-section rsvp-section reveal-on-scroll" id="rsvp" data-reveal>
       <h2>RSVP</h2>
       <form className="rsvp-form" onSubmit={submit}>
         <label>
@@ -687,22 +1054,49 @@ function RsvpSection({ invitation, guest, guestName, onSave, onDelete }) {
           )}
         </div>
       </form>
-      <div className="rsvp-feed">
-        {invitation.rsvps.slice(0, 5).map((item) => (
-          <article key={item.id || item.guestSlug}>
-            <strong>{item.guestName}</strong>
-            <span>{item.attendance} - {item.pax} tamu</span>
-            {item.note && <p>{item.note}</p>}
-          </article>
-        ))}
+    </section>
+  );
+}
+
+function WishWallSection({ invitation }) {
+  const wishes = invitation.rsvps;
+
+  return (
+    <section className="content-section wish-section reveal-on-scroll" data-reveal>
+      <div className="section-title-row">
+        <h2>Ucapan & Doa</h2>
+        <span>{wishes.length} inputan</span>
       </div>
+      {wishes.length === 0 ? (
+        <div className="wish-empty">
+          <MessageCircle size={24} />
+          <strong>Belum ada ucapan masuk</strong>
+          <p>Setiap RSVP dan ucapan dari tamu akan tampil di sini sebagai wall animasi.</p>
+        </div>
+      ) : (
+        <div className="wish-wall">
+          {wishes.map((item, index) => (
+            <article className="wish-card" key={item.id || item.guestSlug} style={{ '--delay': `${Math.min(index * 90, 720)}ms` }}>
+              <div className="wish-card-head">
+                <strong>{item.guestName}</strong>
+                <span>{item.attendance} - {item.pax} tamu</span>
+              </div>
+              <p>{item.note || 'Terima kasih, RSVP sudah tercatat.'}</p>
+              <small>{item.updatedAt ? new Date(item.updatedAt).toLocaleString('id-ID') : 'Baru saja'}</small>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
 function ClosingSection({ invitation }) {
   return (
-    <section className="closing-section">
+    <section className="closing-section reveal-on-scroll" data-reveal>
+      <div className="closing-photo">
+        <img src={invitation.news.image || invitation.hero.trailerImage || imageFallback} alt="" />
+      </div>
       <Heart size={30} fill="currentColor" />
       <p>{invitation.closing.body}</p>
       <strong>{invitation.closing.cta}</strong>
