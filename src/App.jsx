@@ -1061,20 +1061,31 @@ function StorySection({ invitation }) {
       <h2>Our Love Story</h2>
       <div className="episode-shelf">
         {invitation.stories.map((story) => (
-          <article className="episode-cover" key={story.id}>
-            <img src={story.image || imageFallback} alt="" />
-            <div className="episode-gradient" />
-            <div className="episode-cover-copy">
-              <span className="episode-label">{story.episode}</span>
-              <h3>{story.title}</h3>
-              <div className="episode-meta">
-                <span>{story.rating || 'SU'}</span>
-                <span>{story.duration || '03 min read'}</span>
+          <article
+            className="episode-cover"
+            key={story.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setSelectedStory(story)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSelectedStory(story);
+              }
+            }}
+            aria-label={`Lihat detail ${story.episode} ${story.title}`}
+          >
+            <div className="episode-cover-head">
+              <img src={story.image || imageFallback} alt="" />
+              <div className="episode-cover-copy">
+                <h3>
+                  <span>{String(story.episode || '').replace(/:+$/g, '')}:</span>
+                  {story.title}
+                </h3>
               </div>
-              <button type="button" onClick={() => setSelectedStory(story)}>
-                <Play size={14} fill="currentColor" />
-                Lihat Detail
-              </button>
+            </div>
+            <div className="episode-body">
+              <p>{story.body}</p>
             </div>
           </article>
         ))}
