@@ -19,9 +19,10 @@ This repository is designed as a master template for client deployments. All pac
 - QR scanner screen for admin or panitia check-in flow.
 - `/demo` simulator for prospects: quick detail form, temporary photo upload, generated human-style copy, and live preview without database writes.
 - Package tiers prepared for future gating:
-  - Paket 1: RSVP
-  - Paket 2: RSVP + guest-book export
-  - Paket 3: RSVP + guest-book export + QR scan
+  - Basic: RSVP + bulk guest links
+  - Proper: Basic + guest-book export
+  - Premium: Proper + QR scan check-in
+  - Master unlock keeps all features open in this template while showing PRO/lock indicators for client package simulation.
 
 ## Tech Stack
 
@@ -198,7 +199,7 @@ Settings -> General -> Template repository
 
 - [x] Vite production build passes.
 - [x] Dependency audit passes.
-- [x] SPA rewrite is configured for Vercel.
+- [x] SPA rewrite is configured for Vercel without swallowing `/api/*`.
 - [x] Admin template screens are available.
 - [x] `/demo` simulator is available and does not write to database.
 - [x] Bulk guest links and WhatsApp template UI are available.
@@ -207,6 +208,7 @@ Settings -> General -> Template repository
 - [x] Lightweight backend persistence with Neon Postgres JSON state.
 - [x] Backend admin authentication for admin dashboard save.
 - [ ] Server-side QR token validation.
+- [x] Admin-side package indicators and package-limit popup.
 - [ ] Server-side package gating per client.
 - [ ] Future normalized relational schema for multi-client scale.
 - [ ] Optional Vercel Blob integration for uploaded media assets.

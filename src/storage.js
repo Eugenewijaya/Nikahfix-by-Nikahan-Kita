@@ -18,11 +18,12 @@ export function normalizeInvitation(saved = {}) {
   }
 
   const guests = normalizeGuests(saved.guests || defaultInvitation.guests);
+  const packageConfig = normalizePackageConfig(saved.packageConfig);
   return {
     ...clone(defaultInvitation),
     ...saved,
     site: { ...defaultInvitation.site, ...saved.site },
-    packageConfig: { ...defaultInvitation.packageConfig, ...saved.packageConfig },
+    packageConfig,
     cover: { ...defaultInvitation.cover, ...saved.cover },
     music: { ...defaultInvitation.music, ...saved.music },
     hero: { ...defaultInvitation.hero, ...saved.hero },
@@ -72,6 +73,32 @@ function normalizeGuests(guests) {
     ...guest,
     qrToken: guest.qrToken || `qr-${guest.slug || simpleSlug(guest.name) || index + 1}`,
   }));
+}
+
+function normalizePackageId(value = '') {
+  return value === 'standard' ? 'proper' : value || 'premium';
+}
+
+function normalizePackageConfig(saved = {}) {
+  const activePackage = normalizePackageId(saved.activePackage || defaultInvitation.packageConfig.activePackage);
+  const savedTiers = Array.isArray(saved.tiers) ? saved.tiers : [];
+  const tiers = defaultInvitation.packageConfig.tiers.map((defaultTier) => {
+    const match = savedTiers.find((tier) => normalizePackageId(tier.id) === defaultTier.id);
+    return {
+      ...defaultTier,
+      ...(match || {}),
+      id: defaultTier.id,
+      name: defaultTier.name,
+      features: match?.features || defaultTier.features,
+    };
+  });
+
+  return {
+    ...defaultInvitation.packageConfig,
+    ...saved,
+    activePackage: tiers.some((tier) => tier.id === activePackage) ? activePackage : defaultInvitation.packageConfig.activePackage,
+    tiers,
+  };
 }
 
 function simpleSlug(value = '') {

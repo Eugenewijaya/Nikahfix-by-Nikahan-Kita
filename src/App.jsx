@@ -15,6 +15,7 @@ import {
   Heart,
   Image as ImageIcon,
   Link as LinkIcon,
+  Lock,
   LogOut,
   MapPin,
   MessageCircle,
@@ -108,6 +109,71 @@ function extractQrToken(value = '') {
   if (checkinMatch) return decodeURIComponent(checkinMatch[1]);
   const tokenMatch = raw.match(/qr-[a-z0-9-]+/i);
   return tokenMatch ? tokenMatch[0] : raw;
+}
+
+const packageRanks = {
+  basic: 1,
+  proper: 2,
+  premium: 3,
+};
+
+const featureRequirements = {
+  content: 'basic',
+  couple: 'basic',
+  events: 'basic',
+  story: 'basic',
+  gifts: 'basic',
+  guests: 'basic',
+  guestbook: 'proper',
+  scanner: 'premium',
+  packages: 'basic',
+};
+
+const featureLabels = {
+  content: 'Konten undangan',
+  couple: 'Profil pasangan',
+  events: 'Tanggal & lokasi',
+  story: 'Love story & galeri',
+  gifts: 'Wedding gift',
+  guests: 'Bulk link tamu',
+  guestbook: 'Buku tamu dan export',
+  scanner: 'Scan QR check-in',
+  packages: 'Konfigurasi paket',
+};
+
+const packageFeatureKeys = ['guests', 'guestbook', 'scanner'];
+
+function normalizePackageId(value = '') {
+  return value === 'standard' ? 'proper' : value || 'premium';
+}
+
+function packageRank(value) {
+  return packageRanks[normalizePackageId(value)] || packageRanks.premium;
+}
+
+function packageTiers(config = defaultInvitation.packageConfig) {
+  const tiers = Array.isArray(config.tiers) && config.tiers.length ? config.tiers : defaultInvitation.packageConfig.tiers;
+  return tiers.map((tier) => ({ ...tier, id: normalizePackageId(tier.id) }));
+}
+
+function packageTier(config, id) {
+  const normalizedId = normalizePackageId(id);
+  return packageTiers(config).find((tier) => tier.id === normalizedId) || defaultInvitation.packageConfig.tiers.find((tier) => tier.id === normalizedId) || defaultInvitation.packageConfig.tiers[2];
+}
+
+function packageGate(config = defaultInvitation.packageConfig, featureKey) {
+  const requiredId = featureRequirements[featureKey] || 'basic';
+  const activeId = normalizePackageId(config.activePackage || defaultInvitation.packageConfig.activePackage);
+  const restricted = packageRank(activeId) < packageRank(requiredId);
+  return {
+    featureKey,
+    label: featureLabels[featureKey] || featureKey,
+    activeTier: packageTier(config, activeId),
+    requiredTier: packageTier(config, requiredId),
+    restricted,
+    locked: restricted && config.masterUnlock === false,
+    masterUnlock: config.masterUnlock !== false,
+  };
 }
 
 function whatsappMessage(invitation, guest, origin = window.location.origin) {
@@ -1276,6 +1342,7 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
   const [draft, setDraft] = useState(invitation);
   const [tab, setTab] = useState('content');
   const [saved, setSaved] = useState(false);
+  const [packageNotice, setPackageNotice] = useState(null);
 
   useEffect(() => setDraft(invitation), [invitation]);
 
@@ -1297,17 +1364,40 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
     ['packages', Package, 'Paket'],
   ];
 
+  const openTab = (key) => {
+    const gate = packageGate(draft.packageConfig, key);
+    if (gate.restricted) {
+      setPackageNotice(gate);
+      if (gate.locked) return;
+    }
+    setTab(key);
+  };
+
   return (
     <main className="admin-page">
       <aside className="admin-sidebar">
         <BrandLogo label={draft.brand} variant="admin" />
         <nav>
-          {tabs.map(([key, Icon, label]) => (
-            <button className={tab === key ? 'active' : ''} key={key} type="button" onClick={() => setTab(key)}>
-              <Icon size={18} />
-              {label}
-            </button>
-          ))}
+          {tabs.map(([key, Icon, label]) => {
+            const gate = packageGate(draft.packageConfig, key);
+            return (
+              <button
+                className={`${tab === key ? 'active' : ''} ${gate.restricted ? 'is-pro-feature' : ''}`}
+                key={key}
+                type="button"
+                onClick={() => openTab(key)}
+              >
+                <Icon size={18} />
+                <span className="nav-label">{label}</span>
+                {gate.restricted && (
+                  <span className="pro-lock-badge">
+                    <Lock size={12} />
+                    PRO
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
         <a className="preview-link" href="/">
           <Eye size={18} />
@@ -1350,9 +1440,36 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
         {tab === 'guests' && <GuestRsvpEditor draft={draft} setDraft={setDraft} />}
         {tab === 'guestbook' && <GuestBookEditor draft={draft} setDraft={setDraft} />}
         {tab === 'scanner' && <ScannerEditor draft={draft} setDraft={setDraft} onSave={onSave} />}
-        {tab === 'packages' && <PackageEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'packages' && <PackageEditor draft={draft} setDraft={setDraft} onShowGate={setPackageNotice} />}
       </section>
+      {packageNotice && <PackageGateModal notice={packageNotice} onClose={() => setPackageNotice(null)} />}
     </main>
+  );
+}
+
+function PackageGateModal({ notice, onClose }) {
+  return (
+    <div className="package-gate-overlay" role="dialog" aria-modal="true" aria-labelledby="package-gate-title">
+      <article className="package-gate-modal">
+        <div className="package-gate-mark">
+          <Lock size={22} />
+          <span>PRO</span>
+        </div>
+        <h2 id="package-gate-title">Fitur {notice.label}</h2>
+        <p>
+          Anda saat ini berada di paket <strong>{notice.activeTier.name}</strong>. Fitur ini tersedia mulai paket{' '}
+          <strong>{notice.requiredTier.name}</strong>.
+        </p>
+        <p className="helper-text">
+          {notice.masterUnlock
+            ? 'Master unlock aktif, jadi template ini tetap bisa membuka semua fitur untuk kebutuhan demo dan development.'
+            : 'Mode kunci aktif. Naikkan paket client agar fitur ini bisa digunakan di dashboard.'}
+        </p>
+        <button className="red-wide" type="button" onClick={onClose}>
+          Mengerti
+        </button>
+      </article>
+    </div>
   );
 }
 
@@ -2076,24 +2193,38 @@ function ScannerEditor({ draft, setDraft, onSave }) {
   );
 }
 
-function PackageEditor({ draft, setDraft }) {
+function PackageEditor({ draft, setDraft, onShowGate }) {
   const updatePackage = (key, value) => {
     setDraft((prev) => ({ ...prev, packageConfig: { ...prev.packageConfig, [key]: value } }));
   };
-  const active = draft.packageConfig.tiers.find((tier) => tier.id === draft.packageConfig.activePackage);
+  const tiers = packageTiers(draft.packageConfig);
+  const active = packageTier(draft.packageConfig, draft.packageConfig.activePackage);
 
   return (
     <section className="editor-panel wide">
       <h2>Paket Fitur</h2>
       <p className="helper-text">
-        Master ini terbuka semua fitur. Saat deploy ke client, paket bisa dikunci dari konfigurasi/backend supaya hanya
-        fitur sesuai paket yang aktif.
+        Paket Basic, Proper, dan Premium sudah disiapkan untuk batasan fitur client. Master template tetap bisa dibuka
+        semua saat master unlock aktif.
       </p>
+      <div className="package-current-card">
+        <div>
+          <span>PAKET AKTIF</span>
+          <h3>{active.name}</h3>
+          <p>
+            Limit default {active.guestLimit} tamu. {draft.packageConfig.masterUnlock ? 'Semua fitur masih terbuka untuk master template.' : 'Fitur di atas paket aktif akan terkunci.'}
+          </p>
+        </div>
+        <div className={`package-lock-state ${draft.packageConfig.masterUnlock ? 'open' : 'locked'}`}>
+          <Lock size={16} />
+          {draft.packageConfig.masterUnlock ? 'Master Unlock' : 'Client Lock'}
+        </div>
+      </div>
       <div className="package-control">
         <label className="field">
           Paket Aktif
           <select value={draft.packageConfig.activePackage} onChange={(event) => updatePackage('activePackage', event.target.value)}>
-            {draft.packageConfig.tiers.map((tier) => (
+            {tiers.map((tier) => (
               <option key={tier.id} value={tier.id}>
                 {tier.name} - {tier.guestLimit} tamu
               </option>
@@ -2110,9 +2241,12 @@ function PackageEditor({ draft, setDraft }) {
         </label>
       </div>
       <div className="package-grid">
-        {draft.packageConfig.tiers.map((tier) => (
+        {tiers.map((tier) => (
           <article className={`package-card ${active?.id === tier.id ? 'active' : ''}`} key={tier.id}>
-            <Package size={22} />
+            <div className="package-card-head">
+              <Package size={22} />
+              {tier.id !== 'basic' && <span className="pro-badge">PRO</span>}
+            </div>
             <h3>{tier.name}</h3>
             <strong>{tier.guestLimit} tamu</strong>
             <ul>
@@ -2125,6 +2259,27 @@ function PackageEditor({ draft, setDraft }) {
             </ul>
           </article>
         ))}
+      </div>
+      <div className="feature-lock-grid">
+        {packageFeatureKeys.map((featureKey) => {
+          const gate = packageGate(draft.packageConfig, featureKey);
+          return (
+            <article className={`feature-lock-card ${gate.restricted ? 'restricted' : ''}`} key={featureKey}>
+              <div className="feature-lock-icon">
+                {gate.restricted ? <Lock size={17} /> : <CheckCircle2 size={17} />}
+              </div>
+              <div>
+                <strong>{gate.label}</strong>
+                <span>Mulai paket {gate.requiredTier.name}</span>
+              </div>
+              {gate.restricted && (
+                <button className="ghost-button compact" type="button" onClick={() => onShowGate(gate)}>
+                  Lihat Batasan
+                </button>
+              )}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

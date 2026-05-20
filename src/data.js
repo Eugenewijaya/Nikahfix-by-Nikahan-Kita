@@ -23,9 +23,9 @@ export const defaultInvitation = {
     guestLimitStep: 50,
     masterUnlock: true,
     tiers: [
-      { id: 'basic', name: 'Paket 1', guestLimit: 50, features: ['RSVP'] },
-      { id: 'standard', name: 'Paket 2', guestLimit: 100, features: ['RSVP', 'Buku tamu export'] },
-      { id: 'premium', name: 'Paket 3', guestLimit: 150, features: ['RSVP', 'Buku tamu export', 'Scan QR'] },
+      { id: 'basic', name: 'Basic', guestLimit: 50, features: ['RSVP tamu', 'Bulk link undangan'] },
+      { id: 'proper', name: 'Proper', guestLimit: 100, features: ['RSVP tamu', 'Bulk link undangan', 'Buku tamu export'] },
+      { id: 'premium', name: 'Premium', guestLimit: 150, features: ['RSVP tamu', 'Bulk link undangan', 'Buku tamu export', 'Scan QR check-in'] },
     ],
   },
   cover: {
