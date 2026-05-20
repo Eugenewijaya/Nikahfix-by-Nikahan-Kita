@@ -15,6 +15,7 @@ import {
   Heart,
   Image as ImageIcon,
   Link as LinkIcon,
+  LogOut,
   MapPin,
   MessageCircle,
   Music,
@@ -37,7 +38,16 @@ import {
   XCircle,
 } from 'lucide-react';
 import { bankTypes, defaultInvitation } from './data.js';
-import { fetchRemoteInvitation, saveRemoteInvitation } from './apiClient.js';
+import {
+  clearAdminSession,
+  deleteRemoteRsvp,
+  fetchRemoteInvitation,
+  getAdminSession,
+  loginAdmin,
+  saveRemoteInvitation,
+  saveRemoteRsvp,
+  verifyAdminSession,
+} from './apiClient.js';
 import { loadInvitation, makeId, makeToken, resetInvitation, saveInvitation } from './storage.js';
 
 const imageFallback =
@@ -191,6 +201,8 @@ export default function App() {
 
 function PersistentApp({ route }) {
   const [invitation, setInvitation] = useState(loadInvitation);
+  const [adminSession, setAdminSession] = useState(getAdminSession);
+  const [authChecking, setAuthChecking] = useState(route.type === 'admin' && Boolean(getAdminSession()?.token));
   const [syncStatus, setSyncStatus] = useState('local');
 
   useEffect(() => {
@@ -208,14 +220,94 @@ function PersistentApp({ route }) {
     };
   }, []);
 
-  const persist = (next) => {
+  useEffect(() => {
+    if (route.type !== 'admin' || !adminSession?.token) {
+      setAuthChecking(false);
+      return undefined;
+    }
+
+    let active = true;
+    setAuthChecking(true);
+    verifyAdminSession(adminSession).then((ok) => {
+      if (!active) return;
+      if (!ok) {
+        clearAdminSession();
+        setAdminSession(null);
+      }
+      setAuthChecking(false);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [adminSession, route.type]);
+
+  const persistAdmin = (next) => {
     setInvitation(next);
     saveInvitation(next);
-    saveRemoteInvitation(next).then((ok) => setSyncStatus(ok ? 'database' : 'local'));
+    saveRemoteInvitation(next, adminSession?.token).then((ok) => setSyncStatus(ok ? 'database' : 'auth-error'));
+  };
+
+  const persistGuest = (next, action) => {
+    setInvitation(next);
+    saveInvitation(next);
+
+    if (action?.type === 'rsvp') {
+      saveRemoteRsvp(action.payload).then((remoteInvitation) => {
+        if (remoteInvitation) {
+          setInvitation(remoteInvitation);
+          saveInvitation(remoteInvitation);
+          setSyncStatus('database');
+        } else {
+          setSyncStatus('local');
+        }
+      });
+      return;
+    }
+
+    if (action?.type === 'delete-rsvp') {
+      deleteRemoteRsvp(action.guestSlug).then((remoteInvitation) => {
+        if (remoteInvitation) {
+          setInvitation(remoteInvitation);
+          saveInvitation(remoteInvitation);
+          setSyncStatus('database');
+        } else {
+          setSyncStatus('local');
+        }
+      });
+      return;
+    }
+
+    setSyncStatus('local');
+  };
+
+  const handleAdminLogin = async ({ username, password }) => {
+    const result = await loginAdmin(username, password);
+    if (result.ok) {
+      setAdminSession(result.session);
+      setSyncStatus('database');
+    }
+    return result;
+  };
+
+  const logoutAdmin = () => {
+    clearAdminSession();
+    setAdminSession(null);
   };
 
   if (route.type === 'admin') {
-    return <AdminApp invitation={invitation} onSave={persist} syncStatus={syncStatus} />;
+    if (authChecking || !adminSession?.token) {
+      return <AdminLogin onLogin={handleAdminLogin} checking={authChecking} />;
+    }
+
+    return (
+      <AdminApp
+        invitation={invitation}
+        onLogout={logoutAdmin}
+        onSave={persistAdmin}
+        syncStatus={syncStatus}
+      />
+    );
   }
 
   if (route.type === 'checkin') {
@@ -225,7 +317,7 @@ function PersistentApp({ route }) {
   return (
     <InvitationApp
       invitation={invitation}
-      onSave={persist}
+      onSave={persistGuest}
       recipientSlug={route.type === 'invite' ? route.slug : undefined}
     />
   );
@@ -638,11 +730,14 @@ function InvitationApp({ invitation, onSave, recipientSlug }) {
     const nextRsvps = existing
       ? invitation.rsvps.map((rsvp) => (rsvp.guestSlug === payload.guestSlug ? { ...rsvp, ...payload } : rsvp))
       : [{ id: makeId('rsvp'), createdAt: new Date().toISOString(), ...payload }, ...invitation.rsvps];
-    onSave({ ...invitation, rsvps: nextRsvps });
+    onSave({ ...invitation, rsvps: nextRsvps }, { type: 'rsvp', payload });
   };
 
   const deleteRsvp = (guestSlug) => {
-    onSave({ ...invitation, rsvps: invitation.rsvps.filter((rsvp) => rsvp.guestSlug !== guestSlug) });
+    onSave(
+      { ...invitation, rsvps: invitation.rsvps.filter((rsvp) => rsvp.guestSlug !== guestSlug) },
+      { type: 'delete-rsvp', guestSlug },
+    );
   };
 
   const flashCopy = (key, text) => {
@@ -1115,7 +1210,54 @@ function ClosingSection({ invitation }) {
   );
 }
 
-function AdminApp({ invitation, onSave, syncStatus }) {
+function AdminLogin({ onLogin, checking }) {
+  const [username, setUsername] = useState('Owner');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    const result = await onLogin({ username, password });
+    setSubmitting(false);
+    if (!result.ok) setError(result.error || 'Login admin gagal.');
+  };
+
+  return (
+    <main className="admin-login-page">
+      <section className="admin-login-card">
+        <BrandLogo label="NIKAHFIX" variant="cover" />
+        <span className="login-kicker">Admin Invitation Studio</span>
+        <h1>Masuk sebagai Owner</h1>
+        <p>Dashboard admin terhubung ke backend. Login diperlukan untuk mengubah konten, tamu, RSVP, gift, paket, dan QR check-in.</p>
+        <form className="admin-login-form" onSubmit={submit}>
+          <label>
+            ID Admin
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          {error && <strong className="login-error">{error}</strong>}
+          <button className="red-wide" type="submit" disabled={checking || submitting}>
+            <ShieldCheck size={16} />
+            {checking ? 'MEMERIKSA SESSION' : submitting ? 'MASUK...' : 'MASUK ADMIN'}
+          </button>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
   const [draft, setDraft] = useState(invitation);
   const [tab, setTab] = useState('content');
   const [saved, setSaved] = useState(false);
@@ -1163,10 +1305,18 @@ function AdminApp({ invitation, onSave, syncStatus }) {
             <h1>Admin Invitation Studio</h1>
             <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, QR check-in, dan paket fitur.</p>
             <span className={`sync-badge ${syncStatus === 'database' ? 'online' : ''}`}>
-              {syncStatus === 'database' ? 'Database Neon aktif' : 'Mode lokal / menunggu API'}
+              {syncStatus === 'database'
+                ? 'Database Neon aktif'
+                : syncStatus === 'auth-error'
+                  ? 'Session admin perlu login ulang'
+                  : 'Mode lokal / menunggu API'}
             </span>
           </div>
           <div className="admin-actions">
+            <button className="ghost-button" type="button" onClick={onLogout}>
+              <LogOut size={16} />
+              Logout
+            </button>
             <button className="ghost-button" type="button" onClick={() => setDraft(resetInvitation())}>
               Reset
             </button>

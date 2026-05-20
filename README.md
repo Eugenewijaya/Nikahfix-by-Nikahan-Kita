@@ -85,15 +85,16 @@ npm run build
 Do not commit real secrets or database URLs to GitHub. Add these values in Vercel Project Settings instead:
 
 - `DATABASE_URL`: Neon pooled Postgres connection string.
-- `ADMIN_PASSWORD`: future admin login password.
-- `SESSION_SECRET`: future server session secret.
+- `ADMIN_USERNAME`: admin login ID. Default template value is `Owner`.
+- `ADMIN_PASSWORD`: admin login password. Set this in Vercel for production.
+- `SESSION_SECRET`: server token signing secret.
 - `VITE_PUBLIC_SITE_URL`: production domain.
 
 The `/demo` route is intentionally local-only in the browser session. It does not call `/api/state` and does not write to Neon.
 
 ## Current Data Layer
 
-The current implementation includes a lightweight Vercel Functions backend at `api/state.js`.
+The current implementation includes lightweight Vercel Functions for shared state, admin auth, and public RSVP writes.
 
 Production persistence flow:
 
@@ -110,8 +111,12 @@ Neon Postgres
 API routes:
 
 ```text
-GET /api/state
-PUT /api/state
+GET /api/state          Public read for invitation rendering
+PUT /api/state          Admin-only full CRUD save
+POST /api/auth          Admin login
+GET /api/auth           Admin session verification
+POST /api/rsvp          Public guest RSVP upsert
+DELETE /api/rsvp        Public guest RSVP delete
 ```
 
 The API stores the invitation state as JSON in the `invitation_state` table. This is intentionally simple for the first production version and keeps hosting cost low.
@@ -121,6 +126,8 @@ When `DATABASE_URL` is configured:
 - Admin CRUD is shared across devices.
 - Guest RSVP is shared across devices.
 - Guest-book export and QR check-in read from the same state.
+- Admin full save requires a valid backend-issued admin token.
+- Guest RSVP only writes RSVP fields through `/api/rsvp`; it cannot overwrite full invitation content.
 
 When the API/database is unavailable, the app falls back to browser `localStorage`.
 
@@ -131,8 +138,9 @@ You can connect Neon directly to Vercel without Railway.
 1. Create a Neon database.
 2. Copy the pooled connection string.
 3. Add `DATABASE_URL` as a Production environment variable in Vercel Project Settings.
-4. Redeploy the Vercel project.
-5. Open `/admin`, make one save, and the app will create the `invitation_state` table automatically.
+4. Add `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `SESSION_SECRET` in Vercel Project Settings.
+5. Redeploy the Vercel project.
+6. Open `/admin`, login, make one save, and the app will create the `invitation_state` table automatically.
 
 ## QR Check-in Security Notes
 
@@ -197,7 +205,7 @@ Settings -> General -> Template repository
 - [x] Guest-book export UI is available.
 - [x] QR check-in template flow is available.
 - [x] Lightweight backend persistence with Neon Postgres JSON state.
-- [ ] Admin authentication.
+- [x] Backend admin authentication for admin dashboard save.
 - [ ] Server-side QR token validation.
 - [ ] Server-side package gating per client.
 - [ ] Future normalized relational schema for multi-client scale.

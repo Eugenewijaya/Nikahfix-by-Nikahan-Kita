@@ -1,6 +1,5 @@
-import { ensureStateTable, getSql } from './_db.js';
-
-const STATE_ID = 'default';
+import { requireAdmin } from './_auth.js';
+import { defaultState, readJsonBody, readState, writeState } from './_state.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -11,14 +10,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureStateTable();
-
     if (req.method === 'GET') {
       await handleGet(res);
       return;
     }
 
     if (req.method === 'PUT') {
+      if (!requireAdmin(req, res)) return;
       await handlePut(req, res);
       return;
     }
@@ -34,20 +32,14 @@ export default async function handler(req, res) {
 }
 
 async function handleGet(res) {
-  const sql = getSql();
-  const rows = await sql`
-    SELECT data, updated_at
-    FROM invitation_state
-    WHERE id = ${STATE_ID}
-    LIMIT 1
-  `;
+  const row = await readState();
 
-  if (rows.length === 0) {
-    res.status(404).json({ ok: false, data: null, error: 'State has not been initialized.' });
+  if (!row) {
+    res.status(200).json({ ok: true, data: defaultState(), initialized: false, updatedAt: null });
     return;
   }
 
-  res.status(200).json({ ok: true, data: rows[0].data, updatedAt: rows[0].updated_at });
+  res.status(200).json({ ok: true, data: row.data, initialized: true, updatedAt: row.updated_at });
 }
 
 async function handlePut(req, res) {
@@ -59,27 +51,6 @@ async function handlePut(req, res) {
     return;
   }
 
-  const sql = getSql();
-  const rows = await sql`
-    INSERT INTO invitation_state (id, data, updated_at)
-    VALUES (${STATE_ID}, ${JSON.stringify(data)}::jsonb, now())
-    ON CONFLICT (id)
-    DO UPDATE SET data = EXCLUDED.data, updated_at = now()
-    RETURNING updated_at
-  `;
-
-  res.status(200).json({ ok: true, updatedAt: rows[0].updated_at });
-}
-
-async function readJsonBody(req) {
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string') return JSON.parse(req.body || '{}');
-
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.from(chunk));
-  }
-
-  const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
+  const updatedAt = await writeState(data);
+  res.status(200).json({ ok: true, updatedAt });
 }
