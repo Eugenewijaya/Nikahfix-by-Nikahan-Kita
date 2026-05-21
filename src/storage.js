@@ -71,6 +71,7 @@ function isLegacyDemoState(saved = {}) {
 function normalizeGuests(guests) {
   return guests.map((guest, index) => ({
     ...guest,
+    code: guest.code || makeGuestCode(guests.slice(0, index)),
     qrToken: guest.qrToken || `qr-${guest.slug || simpleSlug(guest.name) || index + 1}`,
   }));
 }
@@ -109,6 +110,17 @@ function simpleSlug(value = '') {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
+}
+
+function makeGuestCode(existingGuests = []) {
+  const used = new Set(existingGuests.map((guest) => guest.code).filter(Boolean));
+  let counter = existingGuests.length + 1;
+  let code = `NK-${String(counter).padStart(4, '0')}`;
+  while (used.has(code)) {
+    counter += 1;
+    code = `NK-${String(counter).padStart(4, '0')}`;
+  }
+  return code;
 }
 
 export function loadInvitation() {

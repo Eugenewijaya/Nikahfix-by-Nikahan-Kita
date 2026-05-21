@@ -14,6 +14,7 @@ import {
   Gift,
   Heart,
   Image as ImageIcon,
+  Instagram,
   Link as LinkIcon,
   Lock,
   LogOut,
@@ -54,6 +55,32 @@ import { loadInvitation, makeId, makeToken, resetInvitation, saveInvitation } fr
 const imageFallback =
   'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=900&q=82';
 const brandLogoSrc = '/nikahfix-logo.webp';
+const developerGuestLimit = Number(import.meta.env.VITE_GUEST_LIMIT || defaultInvitation.packageConfig.guestLimit || 150);
+
+const genreOptions = ['DOCUMENTER', 'ROMANTIS', 'DRAMA', 'KELUARGA', 'SPIRITUAL', 'WEDDING'];
+const eventNameOptions = ['Akad / Pemberkatan', 'Resepsi', 'Acara Adat', 'After Party'];
+const timezoneOptions = ['#WIB', '#WITA', '#WIT'];
+
+const whatsappTemplateOptions = [
+  {
+    id: 'template-1',
+    label: 'Opsi 1',
+    text:
+      'Yth. {guestName},\n\nDengan penuh sukacita kami mengundang Bapak/Ibu/Saudara/i untuk hadir dan menjadi bagian dari hari bahagia kami.\n\nDetail undangan dapat dibuka melalui link berikut:\n{inviteLink}\n\nMerupakan kehormatan bagi kami apabila Bapak/Ibu/Saudara/i berkenan hadir dan memberikan doa restu.\n\nSalam hangat,\n{coupleName}',
+  },
+  {
+    id: 'template-2',
+    label: 'Opsi 2',
+    text:
+      'Halo {guestName},\n\nKami ingin berbagi kabar bahagia. Dengan segala kerendahan hati, kami mengundang Anda untuk hadir dalam perayaan pernikahan kami.\n\nSilakan buka undangan digital berikut untuk melihat detail acara dan konfirmasi kehadiran:\n{inviteLink}\n\nDoa dan kehadiran Anda akan sangat berarti bagi kami.\n\nTerima kasih,\n{coupleName}',
+  },
+  {
+    id: 'template-3',
+    label: 'Opsi 3',
+    text:
+      'Kepada {guestName},\n\nHari yang kami nantikan akan segera tiba. Kami mengundang Anda untuk ikut merayakan momen penuh syukur ini bersama keluarga dan orang-orang terkasih.\n\nBuka undangan personal Anda di sini:\n{inviteLink}\n\nMohon konfirmasi kehadiran melalui halaman RSVP agar kami dapat mempersiapkan acara dengan baik.\n\nDengan kasih,\n{coupleName}',
+  },
+];
 
 function getRoute() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -89,6 +116,104 @@ function eventSlug(invitation) {
 
 function coupleName(invitation) {
   return `${invitation.hero.title} ${invitation.hero.subtitle}`.replace(/\s+/g, ' ').replace(/: /g, ' ').trim();
+}
+
+function safeDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateLabel(value, fallback = 'Tanggal Pernikahan') {
+  if (!value) return fallback;
+  const date = safeDate(value);
+  if (!date) return value || fallback;
+  return date.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function heroDateLabel(invitation) {
+  return formatDateLabel(invitation.hero.weddingDate, invitation.hero.dateLabel || 'Tanggal Pernikahan');
+}
+
+function eventDateInput(value = '') {
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw.slice(0, 10);
+  return '';
+}
+
+function formatEventDate(value = '') {
+  const input = eventDateInput(value);
+  return input ? formatDateLabel(`${input}T00:00`, 'Tanggal Acara') : value || 'Tanggal Acara';
+}
+
+function parseTimeRange(value = '') {
+  const match = String(value).match(/(\d{1,2})[:.](\d{2}).*?(\d{1,2})[:.](\d{2})/);
+  if (!match) return { start: '', end: '' };
+  return {
+    start: `${match[1].padStart(2, '0')}:${match[2]}`,
+    end: `${match[3].padStart(2, '0')}:${match[4]}`,
+  };
+}
+
+function formatTimeRange(start = '', end = '') {
+  const normalize = (value) => String(value || '').replace(':', '.');
+  if (start && end) return `${normalize(start)} s.d. ${normalize(end)}`;
+  if (start) return `${normalize(start)} s.d. selesai`;
+  return 'Jam Mulai s.d. Selesai';
+}
+
+function genreList(value = '') {
+  const raw = Array.isArray(value) ? value : String(value || '').split(/[•,|/]+/);
+  return raw.map((item) => item.trim()).filter(Boolean);
+}
+
+function genreLabel(value = '') {
+  const genres = genreList(value);
+  return genres.length ? genres.join(' • ') : 'DOCUMENTER';
+}
+
+function filmReleaseLabel(invitation) {
+  const date = safeDate(invitation.hero.weddingDate || invitation.events?.[0]?.date);
+  return date ? String(date.getFullYear()) : 'Wedding Day';
+}
+
+function filmScheduleLabel(invitation) {
+  return `Coming soon on ${heroDateLabel(invitation)}`;
+}
+
+function splitVerseText(value = '') {
+  const lines = String(value)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return { verse: lines[0] || '', verseSource: '' };
+  const lastLine = lines[lines.length - 1];
+  const looksLikeSource = /^\(.+\)$/.test(lastLine) || /\d+\s*:\s*\d+/.test(lastLine);
+  return looksLikeSource
+    ? { verse: lines.slice(0, -1).join('\n'), verseSource: lastLine }
+    : { verse: lines.join('\n'), verseSource: '' };
+}
+
+function guestLimitFor(invitation) {
+  const configured = Number(invitation.packageConfig?.guestLimit);
+  const active = packageTier(invitation.packageConfig, invitation.packageConfig?.activePackage);
+  const limit = Number.isFinite(configured) && configured > 0 ? configured : developerGuestLimit || active?.guestLimit;
+  return Number.isFinite(limit) && limit > 0 ? limit : 150;
+}
+
+function makeGuestCode(existingGuests = []) {
+  const used = new Set(existingGuests.map((guest) => guest.code).filter(Boolean));
+  let counter = existingGuests.length + 1;
+  let code = `NK-${String(counter).padStart(4, '0')}`;
+  while (used.has(code)) {
+    counter += 1;
+    code = `NK-${String(counter).padStart(4, '0')}`;
+  }
+  return code;
 }
 
 function cloneInvitation(value = defaultInvitation) {
@@ -191,7 +316,7 @@ function whatsappUrl(invitation, guest, origin = window.location.origin) {
 function guestRows(invitation) {
   return invitation.guests.map((guest, index) => {
     const rsvp = invitation.rsvps.find((item) => item.guestSlug === guest.slug);
-    const checkIn = invitation.checkIns.find((item) => item.guestId === guest.id || item.guestSlug === guest.slug);
+    const checkIn = invitation.checkIns.find((item) => item.guestId === guest.id || item.guestSlug === guest.slug || item.guestCode === guest.code);
     return {
       no: index + 1,
       guest,
@@ -216,10 +341,11 @@ function downloadBlob(filename, content, mime) {
 }
 
 function exportGuestCsv(invitation) {
-  const header = ['No', 'Nama Tamu', 'Slug', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in'];
+  const header = ['No', 'Nama Tamu', 'Kode Unik', 'Slug', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in'];
   const rows = guestRows(invitation).map((row) => [
     row.no,
     row.guest.name,
+    row.guest.code || row.guest.qrToken,
     row.guest.slug,
     row.attendance,
     row.pax,
@@ -240,10 +366,11 @@ async function exportGuestPdf(invitation) {
   doc.text(`Buku Tamu - ${coupleName(invitation)}`, 14, 16);
   autoTable(doc, {
     startY: 24,
-    head: [['No', 'Nama Tamu', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in']],
+    head: [['No', 'Nama Tamu', 'Kode', 'RSVP', 'Jumlah', 'Ucapan', 'Check-in']],
     body: guestRows(invitation).map((row) => [
       row.no,
       row.guest.name,
+      row.guest.code || row.guest.qrToken,
       row.attendance,
       row.pax,
       row.note,
@@ -390,7 +517,7 @@ function PersistentApp({ route }) {
 }
 
 function CheckInLanding({ invitation, token }) {
-  const guest = invitation.guests.find((item) => item.qrToken === token);
+  const guest = invitation.guests.find((item) => item.qrToken === token || item.code === token);
   return (
     <main className="checkin-landing">
       <div className="checkin-card">
@@ -556,7 +683,7 @@ function buildDemoInvitation(form) {
       body: `Terima kasih telah berbagi doa, waktu, dan kehangatan untuk ${groom} dan ${bride}. Semoga hari ini menjadi awal cerita yang penuh kasih.`,
       signature: `${groom} & ${bride}`,
     },
-    guests: [{ id: 'demo-guest', name: guestName, slug: guestSlug, qrToken: 'qr-demo-preview' }],
+    guests: [{ id: 'demo-guest', name: guestName, slug: guestSlug, code: 'NK-DEMO', qrToken: 'qr-demo-preview' }],
     rsvps: [],
     checkIns: [],
   };
@@ -676,7 +803,7 @@ function DemoPhonePreview({ invitation }) {
         <div>
           <BrandLogo label={invitation.brand} variant="phone" />
           <h3>{invitation.hero.title}</h3>
-          <p>{invitation.hero.dateLabel}</p>
+          <p>{heroDateLabel(invitation)}</p>
         </div>
       </div>
       <div className="demo-phone-section">
@@ -685,7 +812,7 @@ function DemoPhonePreview({ invitation }) {
           <img src={invitation.events[0]?.image || imageFallback} alt="" />
           <div>
             <strong>{invitation.events[0]?.name}</strong>
-            <span>{invitation.events[0]?.date}</span>
+            <span>{formatEventDate(invitation.events[0]?.date)}</span>
             <p>{invitation.events[0]?.venue}</p>
           </div>
         </div>
@@ -883,7 +1010,7 @@ function HeroSection({ invitation, heroRef }) {
         </h1>
         <div className="meta-line">
           <span className="red-pill">{invitation.hero.status}</span>
-          <span>{invitation.hero.dateLabel}</span>
+          <span>{heroDateLabel(invitation)}</span>
         </div>
         <div className="tag-row">
           {invitation.hero.tags.map((tag) => (
@@ -906,13 +1033,13 @@ function FilmSection({ invitation }) {
       </div>
       <div className="genre-row">
         <span className="netflix-n">N</span>
-        <span>{invitation.film.genre}</span>
+        <span>{genreLabel(invitation.film.genre)}</span>
       </div>
       <h2>{invitation.film.title}</h2>
       <div className="film-meta">
-        <span className="match">{invitation.film.match}</span>
-        <span className="rating">{invitation.film.rating}</span>
-        <span>{invitation.film.release}</span>
+        <span className="match">100% match</span>
+        <span className="rating">SU</span>
+        <span>{filmReleaseLabel(invitation)}</span>
         {invitation.film.quality.map((item) => (
           <span className="quality" key={item}>
             {item}
@@ -920,12 +1047,12 @@ function FilmSection({ invitation }) {
         ))}
       </div>
       <button className="red-wide" type="button">
-        {invitation.film.scheduleLabel}
+        {filmScheduleLabel(invitation)}
       </button>
       <p>{invitation.film.synopsis}</p>
       <blockquote>
         {invitation.film.verse}
-        <cite>{invitation.film.verseSource}</cite>
+        {invitation.film.verseSource && <cite>{invitation.film.verseSource}</cite>}
       </blockquote>
     </section>
   );
@@ -961,6 +1088,7 @@ function CoupleSection({ invitation }) {
               <p>{person.detail}</p>
               {person.instagram && (
                 <a href={person.instagram} target="_blank" rel="noreferrer">
+                  <Instagram size={17} />
                   Instagram
                 </a>
               )}
@@ -982,7 +1110,7 @@ function EventsSection({ invitation, onConfirm }) {
             <img src={event.image || imageFallback} alt="" />
             <div className="event-head">
               <span className="red-pill">{event.name}</span>
-              <h3>{event.date}</h3>
+              <h3>{formatEventDate(event.date)}</h3>
               <div className="meta-line">
                 <span className="soft-pill">{event.time}</span>
                 <span className="soft-pill">{event.timezone}</span>
@@ -1106,7 +1234,7 @@ function StorySection({ invitation }) {
               <h3>{selectedStory.title}</h3>
               <div className="film-meta">
                 <span className="match">100% match</span>
-                <span className="rating">{selectedStory.rating || 'SU'}</span>
+                <span className="rating">SU</span>
                 <span>{selectedStory.duration || '03 min read'}</span>
               </div>
               <p>{selectedStory.body}</p>
@@ -1324,7 +1452,7 @@ function AdminLogin({ onLogin, checking }) {
         <BrandLogo label="NIKAHFIX" variant="cover" />
         <span className="login-kicker">Admin Invitation Studio</span>
         <h1>Masuk sebagai Owner</h1>
-        <p>Dashboard admin terhubung ke backend. Login diperlukan untuk mengubah konten, tamu, RSVP, gift, paket, dan QR check-in.</p>
+        <p>Dashboard admin terhubung ke backend. Login diperlukan untuk mengubah konten, tamu, RSVP, gift, dan QR check-in.</p>
         <form className="admin-login-form" onSubmit={submit}>
           <label>
             ID Admin
@@ -1364,6 +1492,12 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
     window.setTimeout(() => setSaved(false), 1400);
   };
 
+  const autosave = (next) => {
+    onSave(next);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 1400);
+  };
+
   const tabs = [
     ['content', Eye, 'Konten'],
     ['couple', Heart, 'Pasangan'],
@@ -1373,7 +1507,6 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
     ['guests', Users, 'Link Tamu'],
     ['guestbook', ClipboardList, 'Buku Tamu'],
     ['scanner', ScanLine, 'Scan QR'],
-    ['packages', Package, 'Paket'],
   ];
 
   const openTab = (key) => {
@@ -1420,7 +1553,7 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
         <header className="admin-header">
           <div>
             <h1>Admin Invitation Studio</h1>
-            <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, QR check-in, dan paket fitur.</p>
+            <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, dan QR check-in yang tersinkron ke backend.</p>
             <span className={`sync-badge ${syncStatus === 'database' ? 'online' : ''}`}>
               {syncStatus === 'database'
                 ? 'Database Neon aktif'
@@ -1445,14 +1578,13 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
         </header>
 
         {tab === 'content' && <ContentEditor draft={draft} setDraft={setDraft} />}
-        {tab === 'couple' && <ArrayEditor title="Bride & Groom" field="couple" draft={draft} setDraft={setDraft} template={defaultInvitation.couple[0]} />}
-        {tab === 'events' && <ArrayEditor title="Date, Time & Location" field="events" draft={draft} setDraft={setDraft} template={defaultInvitation.events[0]} />}
+        {tab === 'couple' && <CoupleEditor draft={draft} setDraft={setDraft} />}
+        {tab === 'events' && <EventsEditor draft={draft} setDraft={setDraft} />}
         {tab === 'story' && <StoryGalleryEditor draft={draft} setDraft={setDraft} />}
         {tab === 'gifts' && <GiftEditor draft={draft} setDraft={setDraft} />}
-        {tab === 'guests' && <GuestRsvpEditor draft={draft} setDraft={setDraft} />}
-        {tab === 'guestbook' && <GuestBookEditor draft={draft} setDraft={setDraft} />}
-        {tab === 'scanner' && <ScannerEditor draft={draft} setDraft={setDraft} onSave={onSave} />}
-        {tab === 'packages' && <PackageEditor draft={draft} setDraft={setDraft} onShowGate={setPackageNotice} />}
+        {tab === 'guests' && <GuestRsvpEditor draft={draft} setDraft={setDraft} onAutosave={autosave} />}
+        {tab === 'guestbook' && <GuestBookEditor draft={draft} setDraft={setDraft} onAutosave={autosave} />}
+        {tab === 'scanner' && <ScannerEditor draft={draft} setDraft={setDraft} onSave={autosave} />}
       </section>
       {packageNotice && <PackageGateModal notice={packageNotice} onClose={() => setPackageNotice(null)} />}
     </main>
@@ -1499,6 +1631,19 @@ function TextField({ label, value, onChange, textarea = false, type = 'text' }) 
   );
 }
 
+function TemplatePicker({ onSelect }) {
+  return (
+    <div className="template-choice-grid">
+      {whatsappTemplateOptions.map((template) => (
+        <button className="template-choice" type="button" key={template.id} onClick={() => onSelect(template.text)}>
+          <strong>{template.label}</strong>
+          <span>{template.text.split('\n')[0]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ContentEditor({ draft, setDraft }) {
   const updateTag = (index, value) => {
     const tags = [...draft.hero.tags];
@@ -1510,6 +1655,27 @@ function ContentEditor({ draft, setDraft }) {
     paragraphs[index] = value;
     updateNested(setDraft, 'news', 'paragraphs', paragraphs);
   };
+  const selectedGenres = genreList(draft.film.genre);
+  const toggleGenre = (genre) => {
+    const next = selectedGenres.includes(genre)
+      ? selectedGenres.filter((item) => item !== genre)
+      : [...selectedGenres, genre];
+    updateNested(setDraft, 'film', 'genre', genreLabel(next));
+  };
+  const updateWeddingDate = (value) => {
+    setDraft((prev) => ({
+      ...prev,
+      hero: {
+        ...prev.hero,
+        weddingDate: value,
+        dateLabel: formatDateLabel(value, prev.hero.dateLabel || 'Tanggal Pernikahan'),
+      },
+    }));
+  };
+  const updateVerse = (value) => {
+    const verse = splitVerseText(value);
+    setDraft((prev) => ({ ...prev, film: { ...prev.film, ...verse } }));
+  };
 
   return (
     <div className="editor-grid">
@@ -1517,24 +1683,15 @@ function ContentEditor({ draft, setDraft }) {
         <h2>Cover & Hero</h2>
         <TextField label="Brand" value={draft.brand} onChange={(value) => setDraft({ ...draft, brand: value })} />
         <TextField label="Slug URL Client" value={draft.site.eventSlug} onChange={(value) => updateNested(setDraft, 'site', 'eventSlug', slugify(value))} />
-        <TextField label="Cover Prompt" value={draft.cover.prompt} onChange={(value) => updateNested(setDraft, 'cover', 'prompt', value)} />
-        <TextField
-          label="Default Nama Tamu"
-          value={draft.cover.guestFallback}
-          onChange={(value) => updateNested(setDraft, 'cover', 'guestFallback', value)}
-        />
-        <TextField
-          label="Tombol Cover"
-          value={draft.cover.buttonLabel}
-          onChange={(value) => updateNested(setDraft, 'cover', 'buttonLabel', value)}
-        />
         <TextField label="Judul" value={draft.hero.title} onChange={(value) => updateNested(setDraft, 'hero', 'title', value)} />
         <TextField label="Subjudul" value={draft.hero.subtitle} onChange={(value) => updateNested(setDraft, 'hero', 'subtitle', value)} />
-        <TextField label="Status" value={draft.hero.status} onChange={(value) => updateNested(setDraft, 'hero', 'status', value)} />
-        <TextField label="Label Tanggal" value={draft.hero.dateLabel} onChange={(value) => updateNested(setDraft, 'hero', 'dateLabel', value)} />
-        <TextField label="Tanggal Countdown" type="datetime-local" value={draft.hero.weddingDate} onChange={(value) => updateNested(setDraft, 'hero', 'weddingDate', value)} />
+        <TextField label="Tanggal & Jam Pernikahan" type="datetime-local" value={draft.hero.weddingDate} onChange={updateWeddingDate} />
         <TextField label="Hero Image URL" value={draft.hero.heroImage} onChange={(value) => updateNested(setDraft, 'hero', 'heroImage', value)} />
         <TextField label="Trailer Image URL" value={draft.hero.trailerImage} onChange={(value) => updateNested(setDraft, 'hero', 'trailerImage', value)} />
+        <div className="automation-note">
+          <Lock size={16} />
+          <span>Cover prompt, tombol open invitation, nama tamu cover, status film, match, rating, dan schedule dibuat otomatis dari sistem.</span>
+        </div>
         <div className="chip-editor">
           {draft.hero.tags.map((tag, index) => (
             <input key={`${tag}-${index}`} value={tag} onChange={(event) => updateTag(index, event.target.value)} />
@@ -1547,31 +1704,35 @@ function ContentEditor({ draft, setDraft }) {
       </section>
 
       <section className="editor-panel">
-        <h2>Film Copy & Music</h2>
-        <TextField label="Genre" value={draft.film.genre} onChange={(value) => updateNested(setDraft, 'film', 'genre', value)} />
-        <TextField label="Judul Film" value={draft.film.title} onChange={(value) => updateNested(setDraft, 'film', 'title', value)} />
-        <TextField label="Match" value={draft.film.match} onChange={(value) => updateNested(setDraft, 'film', 'match', value)} />
-        <TextField label="Rating" value={draft.film.rating} onChange={(value) => updateNested(setDraft, 'film', 'rating', value)} />
-        <TextField label="Release" value={draft.film.release} onChange={(value) => updateNested(setDraft, 'film', 'release', value)} />
-        <TextField label="Schedule Button" value={draft.film.scheduleLabel} onChange={(value) => updateNested(setDraft, 'film', 'scheduleLabel', value)} />
-        <TextField label="Synopsis" textarea value={draft.film.synopsis} onChange={(value) => updateNested(setDraft, 'film', 'synopsis', value)} />
-        <TextField label="Verse" textarea value={draft.film.verse} onChange={(value) => updateNested(setDraft, 'film', 'verse', value)} />
-        <TextField label="Verse Source" value={draft.film.verseSource} onChange={(value) => updateNested(setDraft, 'film', 'verseSource', value)} />
-        <label className="switch-row">
-          <input
-            checked={draft.music.enabled}
-            type="checkbox"
-            onChange={(event) => updateNested(setDraft, 'music', 'enabled', event.target.checked)}
-          />
-          Aktifkan musik
+        <h2>Film Copy</h2>
+        <label className="field">
+          Genre
+          <div className="option-button-grid">
+            {genreOptions.map((genre) => (
+              <button
+                className={selectedGenres.includes(genre) ? 'selected' : ''}
+                type="button"
+                key={genre}
+                onClick={() => toggleGenre(genre)}
+              >
+                {genre}
+              </button>
+            ))}
+          </div>
         </label>
-        <TextField label="Judul Musik" value={draft.music.title} onChange={(value) => updateNested(setDraft, 'music', 'title', value)} />
-        <TextField label="Path Musik" value={draft.music.src} onChange={(value) => updateNested(setDraft, 'music', 'src', value)} />
+        <TextField label="Judul Film" value={draft.film.title} onChange={(value) => updateNested(setDraft, 'film', 'title', value)} />
+        <TextField label="Synopsis" textarea value={draft.film.synopsis} onChange={(value) => updateNested(setDraft, 'film', 'synopsis', value)} />
+        <TextField
+          label="Ayat / Kutipan"
+          textarea
+          value={[draft.film.verse, draft.film.verseSource].filter(Boolean).join('\n')}
+          onChange={updateVerse}
+        />
+        <p className="helper-text">Musik memakai file bawaan di root project dan tidak dibuka sebagai CRUD client.</p>
       </section>
 
       <section className="editor-panel wide">
         <h2>Breaking News & Closing</h2>
-        <TextField label="News Title" value={draft.news.title} onChange={(value) => updateNested(setDraft, 'news', 'title', value)} />
         <TextField label="News Image URL" value={draft.news.image} onChange={(value) => updateNested(setDraft, 'news', 'image', value)} />
         {draft.news.paragraphs.map((paragraph, index) => (
           <TextField key={index} label={`News Paragraph ${index + 1}`} textarea value={paragraph} onChange={(value) => updateNewsParagraph(index, value)} />
@@ -1593,9 +1754,157 @@ function ContentEditor({ draft, setDraft }) {
           value={draft.site.whatsappTemplate}
           onChange={(value) => updateNested(setDraft, 'site', 'whatsappTemplate', value)}
         />
+        <TemplatePicker onSelect={(value) => updateNested(setDraft, 'site', 'whatsappTemplate', value)} />
         <p className="helper-text">Variabel tersedia: {'{guestName}'}, {'{inviteLink}'}, {'{coupleName}'}.</p>
       </section>
     </div>
+  );
+}
+
+function CoupleEditor({ draft, setDraft }) {
+  const updatePerson = (id, key, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      couple: prev.couple.map((person) => (person.id === id ? { ...person, [key]: value } : person)),
+    }));
+  };
+
+  return (
+    <section className="editor-panel wide">
+      <h2>Bride & Groom</h2>
+      <div className="admin-list split-list">
+        {draft.couple.map((person) => (
+          <article className="admin-row-card" key={person.id}>
+            <div className="mini-preview-row">
+              <img src={person.image || imageFallback} alt="" />
+              <div>
+                <span className="status-pill">{person.role}</span>
+                <h3>{person.name}</h3>
+              </div>
+            </div>
+            <TextField label="Nama" value={person.name} onChange={(value) => updatePerson(person.id, 'name', value)} />
+            <TextField label="Detail Keluarga" textarea value={person.detail} onChange={(value) => updatePerson(person.id, 'detail', value)} />
+            <label className="field">
+              Instagram
+              <div className="input-with-icon">
+                <Instagram size={17} />
+                <input value={person.instagram || ''} onChange={(event) => updatePerson(person.id, 'instagram', event.target.value)} />
+              </div>
+            </label>
+            <TextField label="Foto URL" value={person.image} onChange={(value) => updatePerson(person.id, 'image', value)} />
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EventsEditor({ draft, setDraft }) {
+  const updateEvent = (id, patch) => {
+    setDraft((prev) => ({
+      ...prev,
+      events: prev.events.map((event) => (event.id === id ? { ...event, ...patch } : event)),
+    }));
+  };
+  const addEvent = () => {
+    setDraft((prev) => ({
+      ...prev,
+      events: [
+        ...prev.events,
+        {
+          ...defaultInvitation.events[0],
+          id: makeId('event'),
+          name: 'Resepsi',
+          date: eventDateInput(prev.events[0]?.date),
+          time: prev.events[0]?.time || 'Jam Mulai s.d. Selesai',
+          timezone: prev.events[0]?.timezone || '#WIB',
+          venue: 'Nama Tempat Acara',
+          address: 'Alamat lengkap lokasi acara',
+        },
+      ],
+    }));
+  };
+  const deleteEvent = (id) => {
+    setDraft((prev) => ({ ...prev, events: prev.events.filter((event) => event.id !== id) }));
+  };
+
+  return (
+    <section className="editor-panel wide">
+      <div className="panel-title-row">
+        <h2>Date, Time & Location</h2>
+        <button className="red-wide compact" type="button" onClick={addEvent}>
+          <Plus size={16} />
+          Tambah Acara
+        </button>
+      </div>
+      <div className="admin-list">
+        {draft.events.map((event) => {
+          const time = parseTimeRange(event.time);
+          return (
+            <article className="admin-row-card" key={event.id}>
+              <div className="mini-preview-row">
+                <img src={event.image || imageFallback} alt="" />
+                <div>
+                  <span className="status-pill">{formatEventDate(event.date)}</span>
+                  <h3>{event.name}</h3>
+                </div>
+              </div>
+              <label className="field">
+                Jenis Acara
+                <div className="option-button-grid">
+                  {eventNameOptions.map((name) => (
+                    <button
+                      className={event.name === name ? 'selected' : ''}
+                      type="button"
+                      key={name}
+                      onClick={() => updateEvent(event.id, { name })}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <TextField label="Nama Acara Custom" value={event.name} onChange={(value) => updateEvent(event.id, { name: value })} />
+              <TextField label="Tanggal Acara" type="date" value={eventDateInput(event.date)} onChange={(value) => updateEvent(event.id, { date: value })} />
+              <div className="event-time-grid">
+                <TextField
+                  label="Jam Mulai"
+                  type="time"
+                  value={time.start}
+                  onChange={(value) => updateEvent(event.id, { time: formatTimeRange(value, time.end) })}
+                />
+                <TextField
+                  label="Jam Selesai"
+                  type="time"
+                  value={time.end}
+                  onChange={(value) => updateEvent(event.id, { time: formatTimeRange(time.start, value) })}
+                />
+                <label className="field">
+                  Zona Waktu
+                  <select value={event.timezone || '#WIB'} onChange={(entry) => updateEvent(event.id, { timezone: entry.target.value })}>
+                    {timezoneOptions.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone.replace('#', '')}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <TextField label="Venue" value={event.venue} onChange={(value) => updateEvent(event.id, { venue: value })} />
+              <TextField label="Alamat" textarea value={event.address} onChange={(value) => updateEvent(event.id, { address: value })} />
+              <TextField label="Google Maps URL" value={event.mapsUrl} onChange={(value) => updateEvent(event.id, { mapsUrl: value })} />
+              <TextField label="Foto Acara URL" value={event.image} onChange={(value) => updateEvent(event.id, { image: value })} />
+              {draft.events.length > 1 && (
+                <button className="danger-button" type="button" onClick={() => deleteEvent(event.id)}>
+                  <Trash2 size={16} />
+                  Hapus Acara
+                </button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -1650,6 +1959,73 @@ function ArrayEditor({ title, field, draft, setDraft, template }) {
   );
 }
 
+function StoryListEditor({ draft, setDraft }) {
+  const updateStory = (id, patch) => {
+    setDraft((prev) => ({
+      ...prev,
+      stories: prev.stories.map((story) => (story.id === id ? { ...story, ...patch, rating: 'SU' } : story)),
+    }));
+  };
+  const addStory = () => {
+    setDraft((prev) => {
+      const episodeNumber = prev.stories.length + 1;
+      return {
+        ...prev,
+        stories: [
+          ...prev.stories,
+          {
+            ...defaultInvitation.stories[0],
+            id: makeId('episode'),
+            episode: `Episode ${episodeNumber}:`,
+            title: 'Episode Baru',
+            body: 'Tulis cerita singkat untuk episode ini.',
+            duration: '03 min read',
+            rating: 'SU',
+            image: imageFallback,
+          },
+        ],
+      };
+    });
+  };
+  const deleteStory = (id) => {
+    setDraft((prev) => ({ ...prev, stories: prev.stories.filter((story) => story.id !== id) }));
+  };
+
+  return (
+    <section className="editor-panel wide">
+      <div className="panel-title-row">
+        <h2>Our Love Story</h2>
+        <button className="red-wide compact" type="button" onClick={addStory}>
+          <Plus size={16} />
+          Episode
+        </button>
+      </div>
+      <div className="admin-list">
+        {draft.stories.map((story, index) => (
+          <article className="admin-row-card" key={story.id}>
+            <div className="mini-preview-row">
+              <img src={story.image || imageFallback} alt="" />
+              <div>
+                <span className="status-pill">Episode {index + 1} - SU</span>
+                <h3>{story.title}</h3>
+              </div>
+            </div>
+            <TextField label="Judul Episode" value={story.title} onChange={(value) => updateStory(story.id, { title: value })} />
+            <TextField label="Isi Cerita" textarea value={story.body} onChange={(value) => updateStory(story.id, { body: value })} />
+            <TextField label="Foto Episode URL" value={story.image} onChange={(value) => updateStory(story.id, { image: value })} />
+            {draft.stories.length > 1 && (
+              <button className="danger-button" type="button" onClick={() => deleteStory(story.id)}>
+                <Trash2 size={16} />
+                Hapus Episode
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function StoryGalleryEditor({ draft, setDraft }) {
   const updateGallery = (index, value) => {
     const gallery = [...draft.gallery];
@@ -1662,7 +2038,7 @@ function StoryGalleryEditor({ draft, setDraft }) {
 
   return (
     <div className="editor-grid">
-      <ArrayEditor title="Our Love Story" field="stories" draft={draft} setDraft={setDraft} template={defaultInvitation.stories[0]} />
+      <StoryListEditor draft={draft} setDraft={setDraft} />
       <section className="editor-panel">
         <div className="panel-title-row">
           <h2>Our Memories</h2>
@@ -1754,10 +2130,12 @@ function GiftEditor({ draft, setDraft }) {
   );
 }
 
-function GuestRsvpEditor({ draft, setDraft }) {
+function GuestRsvpEditor({ draft, setDraft, onAutosave }) {
   const origin = window.location.origin;
   const [bulkNames, setBulkNames] = useState('');
   const [copied, setCopied] = useState('');
+  const [limitNotice, setLimitNotice] = useState('');
+  const limit = guestLimitFor(draft);
 
   const flashCopy = (key, text) => {
     copyText(text);
@@ -1765,23 +2143,32 @@ function GuestRsvpEditor({ draft, setDraft }) {
     window.setTimeout(() => setCopied(''), 1100);
   };
 
-  const updateGuest = (id, key, value) => {
-    setDraft((prev) => ({
-      ...prev,
-      guests: prev.guests.map((guest) => {
-        if (guest.id !== id) return guest;
-        if (key === 'name') return { ...guest, name: value };
-        return { ...guest, slug: slugify(value) };
-      }),
-    }));
+  const persistGuestDraft = (next) => {
+    setDraft(next);
+    onAutosave?.(next);
+  };
+
+  const updateGuest = (id, value) => {
+    const current = draft.guests.find((guest) => guest.id === id);
+    if (!current) return;
+    const next = {
+      ...draft,
+      guests: draft.guests.map((guest) => (guest.id === id ? { ...guest, name: value } : guest)),
+      rsvps: draft.rsvps.map((rsvp) => (rsvp.guestSlug === current.slug ? { ...rsvp, guestName: value } : rsvp)),
+      checkIns: draft.checkIns.map((checkIn) => (checkIn.guestId === id ? { ...checkIn, guestName: value } : checkIn)),
+    };
+    persistGuestDraft(next);
   };
 
   const addGuest = () => {
+    if (draft.guests.length >= limit) {
+      setLimitNotice(`Limit tamu client adalah ${limit}. Ubah VITE_GUEST_LIMIT atau packageConfig.guestLimit dari code/env developer bila perlu.`);
+      return;
+    }
     const name = 'Nama Tamu Baru';
-    setDraft((prev) => ({
-      ...prev,
-      guests: [createGuest(name, prev.guests), ...prev.guests],
-    }));
+    const next = { ...draft, guests: [createGuest(name, draft.guests), ...draft.guests] };
+    setLimitNotice('');
+    persistGuestDraft(next);
   };
 
   const bulkCreate = () => {
@@ -1790,21 +2177,41 @@ function GuestRsvpEditor({ draft, setDraft }) {
       .map((line) => line.trim())
       .filter(Boolean);
     if (names.length === 0) return;
-    setDraft((prev) => {
-      const created = [];
-      let nextGuests = [...prev.guests];
-      for (const name of names) {
-        const guest = createGuest(name, nextGuests);
-        created.push(guest);
-        nextGuests = [guest, ...nextGuests];
-      }
-      return { ...prev, guests: nextGuests };
-    });
+    const remaining = Math.max(0, limit - draft.guests.length);
+    if (remaining === 0) {
+      setLimitNotice(`Limit tamu client adalah ${limit}. Tidak ada slot link tersisa.`);
+      return;
+    }
+    const acceptedNames = names.slice(0, remaining);
+    let nextGuests = [...draft.guests];
+    for (const name of acceptedNames) {
+      const guest = createGuest(name, nextGuests);
+      nextGuests = [guest, ...nextGuests];
+    }
+    if (names.length > acceptedNames.length) {
+      setLimitNotice(`${names.length - acceptedNames.length} nama tidak dibuat karena limit ${limit} tamu sudah tercapai.`);
+    } else {
+      setLimitNotice('');
+    }
+    persistGuestDraft({ ...draft, guests: nextGuests });
     setBulkNames('');
   };
 
   const deleteGuest = (id) => {
-    setDraft((prev) => ({ ...prev, guests: prev.guests.filter((guest) => guest.id !== id) }));
+    const removed = draft.guests.find((guest) => guest.id === id);
+    if (!removed) return;
+    persistGuestDraft({
+      ...draft,
+      guests: draft.guests.filter((guest) => guest.id !== id),
+      rsvps: draft.rsvps.filter((rsvp) => rsvp.guestSlug !== removed.slug),
+      checkIns: draft.checkIns.filter(
+        (checkIn) => checkIn.guestId !== id && checkIn.guestSlug !== removed.slug && checkIn.qrToken !== removed.qrToken,
+      ),
+    });
+  };
+
+  const updateWhatsappTemplate = (value) => {
+    persistGuestDraft({ ...draft, site: { ...draft.site, whatsappTemplate: value } });
   };
 
   const summary = summarizeGuests(draft);
@@ -1817,6 +2224,7 @@ function GuestRsvpEditor({ draft, setDraft }) {
           <MetricCard label="RSVP Hadir" value={summary.attending} icon={<CheckCircle2 size={18} />} />
           <MetricCard label="Check-in" value={summary.checkedIn} icon={<UserCheck size={18} />} />
           <MetricCard label="Belum RSVP" value={summary.pending} icon={<XCircle size={18} />} />
+          <MetricCard label="Limit Tamu" value={`${summary.total}/${limit}`} icon={<Lock size={18} />} />
         </div>
       </section>
 
@@ -1838,8 +2246,9 @@ function GuestRsvpEditor({ draft, setDraft }) {
         </label>
         <p className="helper-text">
           Link production mengikuti pola: /{eventSlug(draft)}/nama-tamu. Setelah deploy domain Vercel/custom domain,
-          link otomatis memakai domain production.
+          link otomatis memakai domain production dan daftar tamu langsung autosave ke database.
         </p>
+        {limitNotice && <div className="limit-alert">{limitNotice}</div>}
         <button className="ghost-button" type="button" onClick={addGuest}>
           <Plus size={16} />
           Tambah Manual
@@ -1852,26 +2261,29 @@ function GuestRsvpEditor({ draft, setDraft }) {
           label="Pesan"
           textarea
           value={draft.site.whatsappTemplate}
-          onChange={(value) => updateNested(setDraft, 'site', 'whatsappTemplate', value)}
+          onChange={updateWhatsappTemplate}
         />
+        <TemplatePicker onSelect={updateWhatsappTemplate} />
         <p className="helper-text">Gunakan variabel {'{guestName}'}, {'{inviteLink}'}, dan {'{coupleName}'}.</p>
       </section>
 
       <section className="editor-panel wide">
         <div className="panel-title-row">
           <h2>Daftar Link Tamu</h2>
-          <span className="count-label">{draft.guests.length} link</span>
+          <span className="count-label">{draft.guests.length}/{limit} link</span>
         </div>
         <div className="admin-list">
           {draft.guests.map((guest) => {
-            const link = `${origin}/invite/${guest.slug}`;
             const productionLink = guestLink(draft, guest, origin);
             return (
               <article className="admin-row-card" key={guest.id}>
                 <div className="guest-admin-card">
                   <div className="guest-fields">
-                    <TextField label="Nama Tamu" value={guest.name} onChange={(value) => updateGuest(guest.id, 'name', value)} />
-                    <TextField label="Slug Link" value={guest.slug} onChange={(value) => updateGuest(guest.id, 'slug', value)} />
+                    <TextField label="Nama Tamu" value={guest.name} onChange={(value) => updateGuest(guest.id, value)} />
+                    <div className="guest-code-row">
+                      <span>Kode unik</span>
+                      <strong>{guest.code || guest.qrToken}</strong>
+                    </div>
                     <div className="link-row">
                       <a href={`/${eventSlug(draft)}/${guest.slug}`}>
                         <LinkIcon size={16} />
@@ -1900,6 +2312,7 @@ function GuestRsvpEditor({ draft, setDraft }) {
                   <div className="qr-preview-card">
                     <GuestQrCode invitation={draft} guest={guest} />
                     <span>QR Check-in</span>
+                    <strong>{guest.code || guest.qrToken}</strong>
                   </div>
                 </div>
               </article>
@@ -1923,6 +2336,7 @@ function createGuest(name, existingGuests) {
     id: makeId('guest'),
     name,
     slug,
+    code: makeGuestCode(existingGuests),
     qrToken: makeToken('qr'),
   };
 }
@@ -1970,18 +2384,20 @@ function GuestQrCode({ invitation, guest }) {
   return src ? <img src={src} alt={`QR check-in ${guest.name}`} /> : <div className="qr-skeleton" />;
 }
 
-function GuestBookEditor({ draft, setDraft }) {
+function GuestBookEditor({ draft, setDraft, onAutosave }) {
   const rows = guestRows(draft);
   const summary = summarizeGuests(draft);
   const messageRows = rows.filter((row) => row.rsvp?.note?.trim());
 
   const clearMessage = (guestSlug) => {
-    setDraft((prev) => ({
-      ...prev,
-      rsvps: prev.rsvps.map((rsvp) =>
+    const next = {
+      ...draft,
+      rsvps: draft.rsvps.map((rsvp) =>
         rsvp.guestSlug === guestSlug ? { ...rsvp, note: '', moderatedAt: new Date().toISOString() } : rsvp,
       ),
-    }));
+    };
+    setDraft(next);
+    onAutosave?.(next);
   };
 
   return (
@@ -2012,7 +2428,7 @@ function GuestBookEditor({ draft, setDraft }) {
         <div className="panel-title-row compact">
           <div>
             <h3>Pesan Masuk</h3>
-            <p className="helper-text">Moderasi ucapan yang tampil di halaman undangan. Klik Simpan Semua setelah menghapus pesan.</p>
+            <p className="helper-text">Moderasi ucapan yang tampil di halaman undangan. Penghapusan pesan langsung tersimpan ke database.</p>
           </div>
           <span className="status-pill">{messageRows.length} pesan</span>
         </div>
@@ -2044,6 +2460,7 @@ function GuestBookEditor({ draft, setDraft }) {
             <tr>
               <th>No</th>
               <th>Nama</th>
+              <th>Kode</th>
               <th>RSVP</th>
               <th>Jumlah</th>
               <th>Ucapan</th>
@@ -2056,6 +2473,7 @@ function GuestBookEditor({ draft, setDraft }) {
               <tr key={row.guest.id}>
                 <td>{row.no}</td>
                 <td>{row.guest.name}</td>
+                <td>{row.guest.code || row.guest.qrToken}</td>
                 <td>
                   <span className={`status-pill ${row.attendance === 'Hadir' ? 'ok' : row.attendance === 'Tidak Hadir' ? 'no' : ''}`}>
                     {row.attendance}
@@ -2099,12 +2517,12 @@ function ScannerEditor({ draft, setDraft, onSave }) {
 
   const recordToken = (rawValue) => {
     const token = extractQrToken(rawValue);
-    const guest = draft.guests.find((item) => item.qrToken === token);
+    const guest = draft.guests.find((item) => item.qrToken === token || item.code === token);
     if (!guest) {
       setResult({ type: 'error', title: 'QR tidak dikenal', body: 'Token tidak cocok dengan daftar tamu di event ini.' });
       return;
     }
-    const existing = draft.checkIns.find((item) => item.guestId === guest.id || item.qrToken === guest.qrToken);
+    const existing = draft.checkIns.find((item) => item.guestId === guest.id || item.qrToken === guest.qrToken || item.guestCode === guest.code);
     if (existing) {
       setResult({
         type: 'warning',
@@ -2118,6 +2536,7 @@ function ScannerEditor({ draft, setDraft, onSave }) {
       guestId: guest.id,
       guestSlug: guest.slug,
       guestName: guest.name,
+      guestCode: guest.code,
       qrToken: guest.qrToken,
       checkedInAt: new Date().toISOString(),
       source: 'admin-scanner',

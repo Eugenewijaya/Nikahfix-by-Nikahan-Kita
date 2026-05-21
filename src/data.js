@@ -20,6 +20,7 @@ export const defaultInvitation = {
   },
   packageConfig: {
     activePackage: 'premium',
+    guestLimit: 150,
     guestLimitStep: 50,
     masterUnlock: true,
     tiers: [
@@ -189,8 +190,8 @@ export const defaultInvitation = {
     signature: 'Nama Pria & Nama Wanita',
   },
   guests: [
-    { id: 'guest-1', name: 'Contoh Nama Tamu', slug: 'contoh-nama-tamu', qrToken: 'qr-contoh-nama-tamu' },
-    { id: 'guest-2', name: 'Keluarga Besar', slug: 'keluarga-besar', qrToken: 'qr-keluarga-besar' },
+    { id: 'guest-1', name: 'Contoh Nama Tamu', slug: 'contoh-nama-tamu', code: 'NK-0001', qrToken: 'qr-contoh-nama-tamu' },
+    { id: 'guest-2', name: 'Keluarga Besar', slug: 'keluarga-besar', code: 'NK-0002', qrToken: 'qr-keluarga-besar' },
   ],
   rsvps: [],
   checkIns: [],
