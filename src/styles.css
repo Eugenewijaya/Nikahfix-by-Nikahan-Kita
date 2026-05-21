@@ -1911,6 +1911,12 @@ blockquote cite {
   background: rgba(34, 197, 94, 0.12);
 }
 
+.sync-badge.error {
+  border-color: rgba(255, 90, 95, 0.44);
+  color: var(--danger);
+  background: rgba(255, 90, 95, 0.12);
+}
+
 .package-gate-overlay {
   position: fixed;
   inset: 0;

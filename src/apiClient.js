@@ -89,9 +89,14 @@ export async function saveRemoteInvitation(invitation, token) {
       body: JSON.stringify({ data: invitation }),
     });
 
-    return response.ok;
+    const payload = await response.json().catch(() => null);
+    return {
+      ok: response.ok,
+      status: response.status,
+      error: payload?.error || '',
+    };
   } catch {
-    return false;
+    return { ok: false, status: 0, error: 'Tidak bisa menghubungi API state.' };
   }
 }
 

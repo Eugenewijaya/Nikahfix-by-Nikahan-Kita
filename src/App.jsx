@@ -438,7 +438,13 @@ function PersistentApp({ route }) {
   const persistAdmin = (next) => {
     setInvitation(next);
     saveInvitation(next);
-    saveRemoteInvitation(next, adminSession?.token).then((ok) => setSyncStatus(ok ? 'database' : 'auth-error'));
+    saveRemoteInvitation(next, adminSession?.token).then((result) => {
+      if (result.ok) {
+        setSyncStatus('database');
+        return;
+      }
+      setSyncStatus(result.status === 401 ? 'auth-error' : 'api-error');
+    });
   };
 
   const persistGuest = (next, action) => {
@@ -478,7 +484,6 @@ function PersistentApp({ route }) {
     const result = await loginAdmin(username, password);
     if (result.ok) {
       setAdminSession(result.session);
-      setSyncStatus('database');
     }
     return result;
   };
@@ -1554,12 +1559,14 @@ function AdminApp({ invitation, onLogout, onSave, syncStatus }) {
           <div>
             <h1>Admin Invitation Studio</h1>
             <p>Kelola konten, bulk link tamu, WhatsApp, buku tamu, dan QR check-in yang tersinkron ke backend.</p>
-            <span className={`sync-badge ${syncStatus === 'database' ? 'online' : ''}`}>
+            <span className={`sync-badge ${syncStatus === 'database' ? 'online' : syncStatus === 'api-error' || syncStatus === 'auth-error' ? 'error' : ''}`}>
               {syncStatus === 'database'
                 ? 'Database Neon aktif'
                 : syncStatus === 'auth-error'
                   ? 'Session admin perlu login ulang'
-                  : 'Mode lokal / menunggu API'}
+                  : syncStatus === 'api-error'
+                    ? 'API database gagal / cek env Vercel'
+                    : 'Mode lokal / menunggu API'}
             </span>
           </div>
           <div className="admin-actions">
